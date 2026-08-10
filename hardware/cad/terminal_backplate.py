@@ -14,14 +14,22 @@ Design intent
     absorb an error in the assumed pattern without re-drilling the plate.
     Confirm the real pattern against the physical rear cover, then either keep
     the slots or set `device_slot_len = device_slot_w` for plain round holes.
+
+Outputs
+    gen_step() : the 5 mm plate as a solid
+    gen_dxf()  : the laser/waterjet cut profile, projected from the wall-facing
+                 face of that same solid rather than redrawn from formulas, so
+                 the DXF cannot drift out of step with the 3D part.
 """
 
+import math
+
 from build123d import (
-    Align,
     Axis,
     BuildPart,
     BuildSketch,
     Circle,
+    GeomType,
     Locations,
     Mode,
     Plane,
@@ -63,6 +71,10 @@ cable_corner_r = 8.0
 edge_chamfer = 1.0
 cut_overshoot = 1.0
 
+# --- DXF --------------------------------------------------------------------
+CUT_LAYER = "CUT"
+CHAIN_TOL = 1.0e-4
+
 
 def _through_plane() -> Plane:
     """Sketch plane for through-cuts, dropped below the plate to overshoot."""
@@ -73,7 +85,8 @@ def _corner_points(dx: float, dy: float) -> list[tuple[float, float]]:
     return [(sx * dx / 2.0, sy * dy / 2.0) for sx in (-1, 1) for sy in (-1, 1)]
 
 
-def gen_step():
+def _build_plate():
+    """The plate solid. Shared by the STEP export and the DXF projection."""
     through = plate_t + 2.0 * cut_overshoot
 
     with BuildPart() as plate:
@@ -102,8 +115,113 @@ def gen_step():
         # Deburr the room-facing face
         chamfer(plate.edges().group_by(Axis.Z)[-1], edge_chamfer)
 
-    return label_shape(plate.part, "terminal_backplate")
+    return plate.part
+
+
+def gen_step():
+    return label_shape(_build_plate(), "terminal_backplate")
+
+
+# --- DXF projection ---------------------------------------------------------
+
+
+def _is_full_circle(edge) -> bool:
+    return (edge @ 0 - edge @ 1).length < CHAIN_TOL
+
+
+def _order_edges(edges):
+    """Walk a wire's edges end-to-end, flipping any that run backwards.
+
+    Returns [(edge, start_point, end_point), ...] in contour order.
+    """
+    remaining = list(edges)
+    first = remaining.pop(0)
+    chain = [(first, first @ 0, first @ 1)]
+
+    while remaining:
+        cursor = chain[-1][2]
+        for index, edge in enumerate(remaining):
+            start, end = edge @ 0, edge @ 1
+            if (start - cursor).length < CHAIN_TOL:
+                chain.append((edge, start, end))
+            elif (end - cursor).length < CHAIN_TOL:
+                chain.append((edge, end, start))
+            else:
+                continue
+            remaining.pop(index)
+            break
+        else:
+            raise ValueError("contour does not close; cannot emit a cut profile")
+
+    if (chain[-1][2] - chain[0][1]).length > CHAIN_TOL:
+        raise ValueError("contour does not close; cannot emit a cut profile")
+    return chain
+
+
+def _bulge(edge, start, end) -> float:
+    """DXF bulge for an arc segment: tan(included angle / 4), signed CCW."""
+    if edge.geom_type != GeomType.CIRCLE:
+        return 0.0
+
+    centre = edge.arc_center
+    angle = lambda p: math.degrees(math.atan2(p.Y - centre.Y, p.X - centre.X))
+
+    a_start = angle(start)
+    span = (angle(end) - a_start) % 360.0
+    mid_span = (angle(edge @ 0.5) - a_start) % 360.0
+
+    # If the geometric midpoint falls inside the CCW sweep the arc runs CCW,
+    # otherwise it is the complementary CW arc.
+    included = span if mid_span <= span else span - 360.0
+    return math.tan(math.radians(included) / 4.0)
+
+
+def _emit_wire(msp, wire) -> str:
+    edges = wire.edges()
+
+    if len(edges) == 1 and edges[0].geom_type == GeomType.CIRCLE and _is_full_circle(edges[0]):
+        centre = edges[0].arc_center
+        msp.add_circle(
+            (centre.X, centre.Y),
+            edges[0].radius,
+            dxfattribs={"layer": CUT_LAYER},
+        )
+        return "CIRCLE"
+
+    points = [
+        (start.X, start.Y, 0.0, 0.0, _bulge(edge, start, end))
+        for edge, start, end in _order_edges(edges)
+    ]
+    msp.add_lwpolyline(
+        points,
+        format="xyseb",
+        close=True,
+        dxfattribs={"layer": CUT_LAYER},
+    )
+    return "LWPOLYLINE"
+
+
+def gen_dxf():
+    import ezdxf
+
+    part = _build_plate()
+
+    # The wall-facing face carries the true cut profile; the room-facing face
+    # is chamfered and therefore smaller.
+    face = part.faces().filter_by(Axis.Z).sort_by(Axis.Z)[0]
+
+    doc = ezdxf.new(setup=True)
+    doc.units = ezdxf.units.MM
+    doc.layers.add(CUT_LAYER, color=1)
+    msp = doc.modelspace()
+
+    _emit_wire(msp, face.outer_wire())
+    for inner in face.inner_wires():
+        _emit_wire(msp, inner)
+
+    return doc
 
 
 if __name__ == "__main__":
     gen_step()
+    gen_dxf()

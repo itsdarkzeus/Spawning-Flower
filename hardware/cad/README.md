@@ -9,7 +9,7 @@ Everything here is generated from build123d Python. **Edit the `.py`, never the
 
 | Source | Output | What it is |
 | --- | --- | --- |
-| `terminal_backplate.py` | `terminal_backplate.step` | Wall plate the terminal bolts to |
+| `terminal_backplate.py` | `terminal_backplate.step` + `.dxf` | Wall plate the terminal bolts to, and its cut profile |
 | `terminal_shroud.py` | `terminal_shroud.step` | Anti-tamper / weather canopy over the terminal |
 | `edge_node_enclosure.py` | `edge_node_enclosure.step` | Base + lid box for the Pi sync agent and UPS |
 
@@ -27,6 +27,9 @@ python $CAD/scripts/step terminal_shroud.py
 python $CAD/scripts/step edge_node_enclosure.py
 
 python $CAD/scripts/inspect refs terminal_backplate.step --facts --planes --positioning
+
+# Cut profile for the backplate
+python ../../.claude/skills/dxf/scripts/dxf terminal_backplate.py
 ```
 
 To review in the browser:
@@ -58,8 +61,29 @@ matters when you are maintaining dozens of these.
 > `device_slot_len = device_slot_w` if you want plain round holes.
 
 Suggested material: 5 mm aluminium (laser + drill) for exposed locations, or
-3D-printed PETG for indoor rooms. The `$dxf` skill can project a flat pattern
-from this STEP for a laser cutter.
+3D-printed PETG for indoor rooms.
+
+#### Cut profile — `terminal_backplate.dxf`
+
+Ready to send to a laser, waterjet or plasma cutter. `gen_dxf()` **projects the
+wall-facing face of the same solid** that `gen_step()` exports, rather than
+redrawing the outline from formulas, so the two cannot drift apart. The
+wall-facing face is used deliberately: the room-facing face carries the 1 mm
+deburr chamfer and is therefore slightly smaller.
+
+- Millimetres (`doc.units = MM`), modelspace, 1:1, centred on the origin
+- Every contour on a single `CUT` layer
+- 6 closed `LWPOLYLINE` (outline, cable cutout, 4 slots) + 4 `CIRCLE` (anchors)
+- Arcs are real arcs — polyline bulges and true circles, not faceted polygons
+
+This is a flat plate, so there are no bend lines and no bend layer. If you move
+to a folded sheet-metal version, put fold lines on a separate layer with "bend"
+in the name so the shop's software classifies them correctly.
+
+Before ordering, run the profile through `$sendcutsend` (or your vendor's own
+preflight) to check material, thickness and minimum feature sizes. Note the
+5.5 mm slots and 6.5 mm holes against your chosen thickness — some processes
+impose a minimum hole diameter relative to material thickness.
 
 ### 2. Terminal shroud — 194 × 53 × 164 mm
 
@@ -125,3 +149,14 @@ Deterministic checks against the exported STEP, not the source:
   backplate anchors at (±70, ±80); backplate slots at x=±30 spanning
   y=±49.75…±60.25 (16 mm overall, 60 × 110 pattern)
 - Snapshot review: iso, opposed iso, front, and lid-hidden top views
+
+DXF (`ezdxf`, against the written file):
+
+- Units MM; 6 closed LWPOLYLINE + 4 CIRCLE, no other entities, all on `CUT`
+- Extents exactly 170.000 × 190.000 mm, centred on (0, 0)
+- Anchors Ø6.50 at (±70, ±80); slots 5.50 × 16.00 at (±30, ±55); cable cutout
+  50.00 × 40.00 centred
+- **Area cross-check**: net cut area 29865.22 mm² against the STEP wall-facing
+  face area of 29865.80 mm² — 0.002%, i.e. polyline flattening tolerance. This
+  is what confirms every arc bulge sign and sweep direction is right; bbox
+  checks alone would not catch an inverted arc.
