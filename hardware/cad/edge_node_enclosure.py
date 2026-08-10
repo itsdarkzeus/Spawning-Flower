@@ -62,6 +62,10 @@ lip_clear = 0.4                    # total, so 0.2 per side into the cavity
 
 # --- Lid fixing bosses ------------------------------------------------------
 boss_d = 8.0
+# The bosses must bite INTO the side walls. Sitting them exactly tangent to the
+# cavity leaves a zero-thickness line of contact, which exports as non-manifold
+# edges and slices badly - so overlap the wall by a real amount.
+boss_merge = 1.0
 boss_pilot_d = 2.5                 # M3 thread-forming into plastic
 boss_pilot_depth = 14.0
 lid_screw_d = 3.4                  # M3 clearance
@@ -96,9 +100,9 @@ cut_overshoot = 1.0
 
 
 def _boss_points() -> list[tuple[float, float]]:
-    """Lid boss centres, tucked into the four inside corners."""
-    x = inner_l / 2.0 - boss_d / 2.0
-    y = inner_w / 2.0 - boss_d / 2.0
+    """Lid boss centres, pushed into the four inside corners by `boss_merge`."""
+    x = inner_l / 2.0 - boss_d / 2.0 + boss_merge
+    y = inner_w / 2.0 - boss_d / 2.0 + boss_merge
     return [(sx * x, sy * y) for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)]
 
 

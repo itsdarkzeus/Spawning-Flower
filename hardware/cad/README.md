@@ -12,6 +12,15 @@ Everything here is generated from build123d Python. **Edit the `.py`, never the
 | `terminal_backplate.py` | `terminal_backplate.step` + `.dxf` | Wall plate the terminal bolts to, and its cut profile |
 | `terminal_shroud.py` | `terminal_shroud.step` | Anti-tamper / weather canopy over the terminal |
 | `edge_node_enclosure.py` | `edge_node_enclosure.step` | Base + lid box for the Pi sync agent and UPS |
+| `edge_node_base.py` | `edge_node_base.step` | The enclosure base alone — the printable body |
+| `edge_node_lid.py` | `edge_node_lid.step` | The enclosure lid alone — the printable body |
+
+`edge_node_base.py` and `edge_node_lid.py` are thin wrappers that call
+`make_base()` / `make_lid()` from `edge_node_enclosure.py`. Change parameters in
+the assembly file; the per-body exports follow automatically.
+
+Mesh exports for every part live in `meshes/` as `.glb`, `.stl` and `.3mf` —
+see [Mesh exports](#mesh-exports).
 
 ## Regenerating
 
@@ -30,6 +39,12 @@ python $CAD/scripts/inspect refs terminal_backplate.step --facts --planes --posi
 
 # Cut profile for the backplate
 python ../../.claude/skills/dxf/scripts/dxf terminal_backplate.py
+
+# Mesh sidecars (GLB / STL / 3MF) alongside the STEP
+python $CAD/scripts/step edge_node_base.py \
+  --glb meshes/edge_node_base.glb \
+  --stl meshes/edge_node_base.stl \
+  --3mf meshes/edge_node_base.3mf
 ```
 
 To review in the browser:
@@ -108,7 +123,10 @@ queue, plus a UPS/battery board.
 - 4 × board standoffs, 6 mm tall, on the **58 × 49 mm Raspberry Pi pattern**
   (common to Pi 4B and Pi 5), Ø2.1 pilots for M2.5
 - 4 × corner bosses full cavity height, Ø2.5 pilots for M3, with matching
-  Ø3.4 clearance holes in the lid
+  Ø3.4 clearance holes in the lid. The bosses deliberately **overlap the side
+  walls by 1 mm** (`boss_merge`) — sitting them exactly tangent to the cavity
+  produced a zero-thickness line of contact that exported as non-manifold edges
+  and would have sliced badly
 - Lid spigot lip, 2 mm deep, with corner reliefs so it clears the bosses
 - 2 × Ø16.5 M16 cable glands on the lower wall (fit downward so water drains)
 - 5 × ventilation slots on the opposite wall
@@ -116,6 +134,27 @@ queue, plus a UPS/battery board.
 
 Suggested material: 3D-printed PETG or ABS. PLA is a poor choice — these boxes
 sit in unconditioned rooms.
+
+## Mesh exports
+
+`meshes/` holds `.glb`, `.stl` and `.3mf` for every part. These are **sidecars,
+not the source of truth** — STEP is the CAD artifact, meshes are derived and get
+regenerated. Default mesh density: 0.02 linear / 0.05 angular deflection.
+
+| Format | Use it for | Notes |
+| --- | --- | --- |
+| **GLB** | Web viewers, presentations, 3D embeds | glTF 2.0 binary, **Y-up and metre-scaled** per the glTF convention — so a 170 mm plate reads as 0.17 units |
+| **STL** | Slicing, any 3D printer | No units in the format; every file here is millimetres |
+| **3MF** | Slicing, preferred over STL | Carries units explicitly (`millimeter`) and keeps multiple bodies separate |
+
+### Print the per-body files, not the assembly
+
+`edge_node_enclosure` is an assembly whose lid sits face-to-face on the base rim
+at z=58. Written to a single STL those surfaces merge, leaving 4 non-manifold
+edges — STL has no notion of separate bodies. That file is for **visualisation
+only**. For slicing use `edge_node_base` and `edge_node_lid`, which are
+individually watertight. The assembly `.3mf` does keep the bodies separate, so
+it is also safe to open in a slicer.
 
 ## Assumptions and limits
 
@@ -160,3 +199,18 @@ DXF (`ezdxf`, against the written file):
   face area of 29865.80 mm² — 0.002%, i.e. polyline flattening tolerance. This
   is what confirms every arc bulge sign and sweep direction is right; bbox
   checks alone would not catch an inverted arc.
+
+Meshes (parsed from the written files):
+
+- GLB: valid glTF 2.0 magic and version on all five files
+- STL bounding boxes match the STEP: backplate 170×190×5, shroud 194×53×164,
+  base 173×95×58, lid 125×95×5, assembly 173×95×61
+- **Watertightness** (every edge shared by exactly two triangles):
+  backplate, shroud, base and lid all pass with 0 non-manifold edges. The
+  assembly STL has 4, from the lid-on-rim contact described above — expected,
+  and the reason the per-body files exist.
+- 3MF units declared `millimeter`; assembly 3MF carries 3 objects
+
+This watertightness check is what caught the tangent-boss defect: the base
+originally exported with 8 non-manifold edges, two per corner boss. The STEP
+inspected cleanly and the snapshots looked right — only the mesh test found it.
