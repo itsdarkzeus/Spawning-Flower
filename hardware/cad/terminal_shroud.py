@@ -69,7 +69,7 @@ edge_chamfer = 0.8
 cut_overshoot = 1.0
 
 
-def gen_step():
+def make_shroud():
     with BuildPart() as shroud:
         # Outer block
         Box(
@@ -126,7 +126,11 @@ def gen_step():
         )
         chamfer(front_edges, edge_chamfer)
 
-    return label_shape(shroud.part, "terminal_shroud")
+    return shroud.part
+
+
+def gen_step():
+    return label_shape(make_shroud(), "terminal_shroud")
 
 
 if __name__ == "__main__":

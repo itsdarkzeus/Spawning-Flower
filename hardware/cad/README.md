@@ -14,6 +14,8 @@ Everything here is generated from build123d Python. **Edit the `.py`, never the
 | `edge_node_enclosure.py` | `edge_node_enclosure.step` | Base + lid box for the Pi sync agent and UPS |
 | `edge_node_base.py` | `edge_node_base.step` | The enclosure base alone — the printable body |
 | `edge_node_lid.py` | `edge_node_lid.step` | The enclosure lid alone — the printable body |
+| `terminal_device_envelope.py` | `terminal_device_envelope.step` | Stand-in body for the terminal itself |
+| `attendance_capture_point.py` | `attendance_capture_point.step` + `.glb` | Everything in one wall-referenced frame |
 
 `edge_node_base.py` and `edge_node_lid.py` are thin wrappers that call
 `make_base()` / `make_lid()` from `edge_node_enclosure.py`. Change parameters in
@@ -156,10 +158,60 @@ only**. For slicing use `edge_node_base` and `edge_node_lid`, which are
 individually watertight. The assembly `.3mf` does keep the bodies separate, so
 it is also safe to open in a slicer.
 
+## The combined assembly
+
+`attendance_capture_point.py` places every body in one **wall frame**: origin on
+the wall surface at the bottom centre of the capture point, +Y into the room,
++Z up. Verified placements:
+
+| Body | X | Y | Z |
+| --- | --- | --- | --- |
+| backplate | −85 … 85 | 0 … 5 | −17.5 … 172.5 |
+| terminal | −70 … 70 | 5 … 35 | 0 … 155 |
+| shroud | −97 … 97 | 0 … 53 | 0 … 164 |
+| node_base | 233.5 … 406.5 | 0 … 58 | 12.5 … 107.5 |
+| node_lid | 257.5 … 382.5 | 56 … 61 | 12.5 … 107.5 |
+
+Those numbers confirm the designed clearances in situ: terminal 6 mm below the
+canopy, 4 mm each side, 18 mm of overhang past its front face, and the lid lip
+inserted 2 mm into the base.
+
+The edge node is rotated an extra 180° about its own Z so that, once stood up on
+the wall, the **cable glands face downwards** and water runs off them.
+
+### Interactive viewer — `assembly_bench.html`
+
+A single self-contained page (~0.86 MB, no network access needed) for pulling
+the install apart and putting it back together: drag a body and it snaps to its
+seat when released, shift-drag spins it, clicking a name centres the view on it.
+
+Rebuild it after any CAD change:
+
+```bash
+python tools/build_assembly_bench.py
+```
+
+That tessellates the assembly STEP, packs the bodies into one binary blob, and
+inlines the blob and three.js into `tools/assembly_bench_template.html`.
+Everything must be inlined because artifact pages run under a CSP that blocks
+external hosts. Third-party: three.js r128 and its OrbitControls example, MIT
+licensed, cached in `tools/vendor/`.
+
+**A GLB cannot do this on its own.** glTF is a static scene format — it can
+carry an assembly tree and even baked animation, but it has no interaction
+model, so "drag a part until it snaps home" has to live in a viewer. The GLB
+(`meshes/attendance_capture_point.glb`) is the portable 3D file for any glTF
+viewer; `assembly_bench.html` is the interactive one.
+
 ## Assumptions and limits
 
 1. **Terminal hole pattern is assumed** (see above). Verify before batching.
-2. **No board-level fit check was performed.** The standoff pattern comes from
+2. **The terminal body is an envelope, not a vendor model.** Hikvision publishes
+   no STEP for this SKU and the step.parts catalog returned no match against a
+   reachable API. `terminal_device_envelope.py` is built from the published
+   140 × 155 × 30 mm outline; the screen and sensor positions on its face are
+   indicative only and must not be used as dimensions.
+3. **No board-level fit check was performed.** The standoff pattern comes from
    the published Raspberry Pi mechanical spec. Nothing here has been checked
    against a real board or a specific UPS HAT. Re-download the catalog Pi 5
    model and do your own fit check:
@@ -167,11 +219,11 @@ it is also safe to open in a slicer.
    python ../../.claude/skills/step-parts/scripts/download_step_part.py \
      --id raspberry_pi_5 --download --out-dir vendor
    ```
-3. **No structural, thermal, tolerance or IP-rating analysis was done.** Wall
+4. **No structural, thermal, tolerance or IP-rating analysis was done.** Wall
    thicknesses and clearances are first-pass modelling defaults. The vent slots
    mean the enclosure has **no meaningful ingress rating** — do not mount it
    outdoors or anywhere exposed without redesigning that face.
-4. Print/cut clearances assume a well-tuned machine. The lid lip has 0.4 mm
+5. Print/cut clearances assume a well-tuned machine. The lid lip has 0.4 mm
    total clearance, which is tight for FDM; open it up if your printer runs wide.
 
 ## Validation performed
