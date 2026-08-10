@@ -1,0 +1,7 @@
+# Python build artifacts, including those produced by running the
+# .agents/skills CAD tooling and its editable cadpy install
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
