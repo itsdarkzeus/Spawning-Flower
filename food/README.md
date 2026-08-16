@@ -92,14 +92,22 @@ Needs `build123d`, `cadpy`, `numpy`, and `playwright` for previews only.
    diagram, a game prop or a print; for a photoreal render, take it into
    Blender and add materials. Food lives or dies on subsurface scattering and
    texture, and none of that exists here.
-2. **Y-up, metres.** Per the glTF convention the writer converts from
+2. **Colours are converted sRGB -> linear on export.** glTF defines
+   `baseColorFactor` in *linear* space, but palettes get picked in sRGB. Writing
+   sRGB values straight through makes every material render washed out, because
+   the viewer applies its own linear->sRGB transfer on top - a 0.78 red arrives
+   pink and golden chicken arrives cream. `mesh_kit.srgb_to_linear()` handles
+   it, so author `color` in sRGB and let the writer convert. Note this is
+   invisible in `tools/preview.py`, which renders the sRGB values directly;
+   verify colour against the GLB itself through a real glTF loader.
+3. **Y-up, metres.** Per the glTF convention the writer converts from
    millimetre Z-up CAD coordinates, so the 256 mm box arrives as 0.256 units.
-3. **The layout is constrained by the tray taper.** The box narrows towards its
+4. **The layout is constrained by the tray taper.** The box narrows towards its
    floor, so contents sit against a footprint of ±113 × ±82 mm, not the ±126 ×
    ±95 mm of the rim. Three pieces poked through the walls before this was
    accounted for; there is now headroom for the crust pushing outward too.
-4. **The carton leans less than in the reference photo.** Past about 40° its
+5. **The carton leans less than in the reference photo.** Past about 40° its
    mouth intersects the open lid.
-5. **Not watertight, not printable as-is.** Displacement is applied per body
+6. **Not watertight, not printable as-is.** Displacement is applied per body
    with no collision handling, and pieces are allowed to touch. This is a
    visual asset. The STEP is the clean geometry.

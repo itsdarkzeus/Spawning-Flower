@@ -161,6 +161,19 @@ def crust(verts, faces, seed=1, mass=3.0, mass_freq=0.030, grain=1.5, grain_freq
 # GLB writer
 # --------------------------------------------------------------------------
 
+def srgb_to_linear(c):
+    """Convert one sRGB channel (0-1) to linear.
+
+    glTF defines baseColorFactor in LINEAR space, but palettes are almost
+    always picked in sRGB - the value you would type into a colour picker.
+    Writing sRGB values straight into baseColorFactor makes every material
+    render washed out, because the viewer then applies its own linear->sRGB
+    transfer on top: a 0.78 red displays at 0.90, so a deep red arrives pink.
+    """
+    c = float(c)
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
 def _pad(buf: bytearray, alignment: int = 4, fill: bytes = b"\x00"):
     while len(buf) % alignment:
         buf += fill
@@ -170,7 +183,8 @@ def write_glb(path, primitives, y_up: bool = True, scale: float = 0.001):
     """Write a binary glTF 2.0 file.
 
     `primitives` is a list of dicts: name, verts (Nx3 mm), faces (Mx3),
-    color (r,g,b) 0-1, and optional roughness / metallic.
+    color (r,g,b) 0-1 **in sRGB**, and optional roughness / metallic.
+    Colours are converted to linear on the way out, per the glTF spec.
 
     glTF convention is metres and Y-up, so millimetre Z-up CAD coordinates are
     converted here: scale by 0.001 and map (x, y, z) -> (x, z, -y).
@@ -223,7 +237,8 @@ def write_glb(path, primitives, y_up: bool = True, scale: float = 0.001):
         })
         idx_acc = len(accessors) - 1
 
-        r, g, b = prim["color"]
+        # Palette entries are authored in sRGB; glTF wants linear.
+        r, g, b = (srgb_to_linear(c) for c in prim["color"])
         materials.append({
             "name": prim["name"] + "_mat",
             "pbrMetallicRoughness": {
