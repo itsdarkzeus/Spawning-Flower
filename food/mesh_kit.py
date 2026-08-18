@@ -132,15 +132,28 @@ def fbm(points, octaves=4, frequency=0.06, lacunarity=2.1, gain=0.52, seed=1):
     return total / max(norm, 1e-9)
 
 
-def roughen(verts, faces, amplitude=2.4, frequency=0.075, octaves=4, seed=1, bias=0.0):
+def roughen(verts, faces, amplitude=2.4, frequency=0.075, octaves=4, seed=1,
+            bias=0.0, axis_scale=None, mask=None):
     """Push vertices along their normals by fractal noise.
 
     `bias` shifts the noise so the surface swells outward on average, which is
     what a batter coating actually does to the silhouette.
+
+    `axis_scale` stretches the noise field per axis before sampling. Squashing
+    one axis and stretching another turns isotropic lumps into streaks running
+    along a direction - which is how a spoon-dragged sauce smear or the grain
+    of a fish fillet actually looks. Isotropic noise cannot express either.
+
+    `mask` is an optional per-vertex multiplier (0-1) for the displacement, so
+    detail can be confined to part of a surface.
     """
     normals = vertex_normals(verts, faces)
-    n = fbm(verts, octaves=octaves, frequency=frequency, seed=seed) + bias
-    return verts + normals * (n * amplitude)[:, None]
+    sample = verts if axis_scale is None else verts * np.asarray(axis_scale, dtype=float)
+    n = fbm(sample, octaves=octaves, frequency=frequency, seed=seed) + bias
+    delta = n * amplitude
+    if mask is not None:
+        delta = delta * np.asarray(mask, dtype=float)
+    return verts + normals * delta[:, None]
 
 
 def crust(verts, faces, seed=1, mass=3.0, mass_freq=0.030, grain=1.5, grain_freq=0.16):

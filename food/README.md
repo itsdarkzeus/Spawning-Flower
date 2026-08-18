@@ -1,12 +1,22 @@
-# Fast-food meal box — 3D model
+# Food models
+
+Two dishes built from reference photos, both through the same two-stage
+pipeline described below.
+
+| Dish | Deliverable | Meshes | Triangles | Size |
+| --- | --- | --- | --- | --- |
+| Fast-food meal box | `meal_box.glb` | 20 | 434k | 10.4 MB |
+| Plated fish | `plated_fish.glb` | 20 | 447k | 10.7 MB |
+
+![meal box](render/meal_photo_angle.png)
+![plated fish](render/plated_fish_top.png)
+
+---
+
+# 1 · Fast-food meal box
 
 A generic fried-chicken meal box: open clamshell, three pieces of chicken, a
-fries carton and chips. Built from a reference photo.
-
-**Deliverable:** `meal_box.glb` — glTF 2.0 binary, 20 named meshes, PBR
-materials, 434k triangles, 10.4 MB.
-
-![preview](render/meal_photo_angle.png)
+fries carton and chips.
 
 ## No branding
 
@@ -111,3 +121,70 @@ Needs `build123d`, `cadpy`, `numpy`, and `playwright` for previews only.
 6. **Not watertight, not printable as-is.** Displacement is applied per body
    with no collision handling, and pieces are allowed to touch. This is a
    visual asset. The STEP is the clean geometry.
+
+---
+
+# 2 · Plated fish
+
+A seared fillet on a white coupe plate, with a red pepper smear, a herb oil
+dollop, charred leek batons, a rolled leek curl, roasted cherry tomatoes and
+micro herbs. Built by `plated_fish.py` into `plated_fish.glb` and
+`plated_fish.step`.
+
+![angle](render/plated_fish_angle.png)
+
+## Files
+
+| File | What |
+| --- | --- |
+| `plate.py` | The plate — a single revolved profile |
+| `fish.py` | Fillet core, and the `sear()` surface treatment |
+| `garnish.py` | Leeks, curl, tomatoes, leaves, sauce bodies, `comb()` |
+| `plated_fish.py` | Scene layout, `gen_step()` and `build_glb()` |
+
+## What this dish added to the toolkit
+
+**Anisotropic noise.** The meal box only needed isotropic lumpiness — crumbs
+are equally bumpy in every direction. Nothing on this plate is. A fish fillet
+has grain running along its length where the muscle flakes separate, and a
+sauce smear has comb lines from the drag of a spoon. Both are *directional*,
+and isotropic noise renders them as generic bumpiness.
+
+So `mesh_kit.roughen()` gained `axis_scale`, which stretches the noise field
+per axis before sampling. Squash the sample along X and the lumps elongate into
+streaks that follow the length. It also gained `mask`, a per-vertex multiplier,
+used to fade displacement to nothing at the fillet's tips — the loft converges
+to a tiny section there, and full-amplitude noise on a handful of tightly
+packed vertices throws visible spikes off the ends.
+
+**A deterministic crease.** The seam where a fillet's two muscle lobes meet is
+not noise, so it is not left to the fractal: `fish.sear()` presses an explicit
+Gaussian groove along `y = 0`, applied only to upward-facing vertices so the
+flat underside is untouched.
+
+**Seating parts on a curved surface.** The plate's well rises towards the rim,
+so `plate_height()` samples the same control points the revolve uses and
+`seat()` drops each garnish onto the actual surface. Dropping everything to one
+height leaves the outer items floating or sunk.
+
+## Things that went wrong, and what fixed them
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Plate came out 193 mm wide and 10 mm tall | The underside profile crossed the top surface near r≈96, splitting the wire into two loops. The revolve then quietly produced a stunted plate rather than failing | Redrew the underside with clearance everywhere; the profile now asserts it made exactly one closed wire |
+| Fillet stood on its side | One rotation moves the loft's length onto X but leaves the section's axes swapped | Two rotations — `Rot(90,0,0) * Rot(0,90,0)` |
+| Leek curl came out a knot | Ribbon 13 mm wide against a spiral radial pitch of 5.1 mm, so consecutive coils intersected | Widened the pitch, narrowed the ribbon, pinned an explicit vertical `x_dir` so it stands on edge; now asserts pitch > ribbon thickness |
+| Micro herbs invisible | Placed inside the fillet's footprint, which is a ~58 mm wide band running most of the plate | Moved them clear of that band, with one deliberately lifted to rest on the fish |
+| 47 MB, 2M triangles | Garnish-scale parts subdivided twice for no visible gain | Subdivision tuned per part; sauces keep two levels because the comb streaks need the resolution |
+
+## Limits specific to this dish
+
+- **No char marks on the leeks.** The reference has dark charred banding. With
+  one flat colour per mesh the only way to express that is more meshes, and it
+  would not survive as geometry anyway — it wants a texture. The leeks *are*
+  split into green and pale meshes, which is the same trick applied where it
+  does pay off.
+- **The plate gets no displacement at all**, deliberately. Glazed porcelain is
+  smooth, and noise on it reads as cheap ceramic.
+- Everything in "Notes and limits" above applies here too, especially the flat
+  colours and the sRGB→linear conversion.
