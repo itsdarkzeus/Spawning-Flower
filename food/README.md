@@ -6,7 +6,8 @@ pipeline described below.
 | Dish | Deliverable | Meshes | Triangles | Size |
 | --- | --- | --- | --- | --- |
 | Fast-food meal box | `meal_box.glb` | 20 | 434k | 10.4 MB |
-| Plated fish | `plated_fish.glb` | 20 | 447k | 10.7 MB |
+| Plated fish | `plated_fish.glb` | 19 | 958k | 30.7 MB |
+| Grilled chicken & jollof | `jollof_plate.glb` | 17 | 829k | 27.0 MB |
 
 ![meal box](render/meal_photo_angle.png)
 ![plated fish](render/plated_fish_top.png)
@@ -256,3 +257,57 @@ height leaves the outer items floating or sunk.
   smooth, and noise on it reads as cheap ceramic.
 - Everything in "Notes and limits" above applies here too, especially the flat
   colours and the sRGB→linear conversion.
+
+---
+
+# 3 · Grilled chicken and jollof rice
+
+Charred thighs, a mound of jollof, grilled corn rounds and a chilli pot on a
+wide-rimmed matte black plate. Built by `jollof_plate.py`.
+
+![jollof](render/jollof_verify.png)
+
+| File | What |
+| --- | --- |
+| `rice.py` | Mound core, grain geometry, instanced grain shell, crown |
+| `grill.py` | Corn cob core, instanced kernels, chicken thigh + `char_skin` |
+| `plate.py` | `make_rimmed_plate()` alongside the coupe plate |
+| `jollof_plate.py` | Scene layout, `gen_step()` and `build_glb()` |
+
+## Instancing — what displacement fundamentally cannot do
+
+Every earlier surface in this project is a CAD solid pushed around by noise.
+Rice defeats that completely. **Displacement moves an existing surface; it can
+never separate one body into many.** A noise-roughened dome is lumpy porridge,
+never rice, no matter how the noise is tuned. Corn kernels are the same
+problem.
+
+So `mesh_kit.instance()` replicates one small mesh at many placements and
+merges the result into a single primitive: ~4,200 grain ellipsoids laid tangent
+to the mound with random azimuth, and 126 kernels per cob round in a staggered
+lattice. `frame_from_normal()` builds the per-instance basis.
+
+Because a grain is drawn thousands of times, its triangle count *is* the
+budget: `uv_ellipsoid()` builds it directly at a chosen resolution rather than
+inheriting whatever a mesher produces. 64 triangles per grain.
+
+Both instanced elements need a **core solid** just inside them, or you see
+straight through the gaps. Two rules learned the hard way: the core must sit
+clearly inside (a small inset lets its smooth silhouette poke through and read
+as a solid flange around the mound), and it must be **darker** than the shell,
+so any peek-through reads as shadow between grains rather than as a surface.
+
+## The loft overshoot
+
+`loft()` defaults to fitting a spline through its sections, which **overshoots**
+when sections are closely spaced. The rice mound has four profile stations in
+its top 12%, and the default loft produced a core 151 mm across instead of 118 —
+swallowing the grain shell entirely. `loft(ruled=True)` builds straight
+segments between sections and fixes it. Worth suspecting whenever a lofted part
+comes out larger than its own control points.
+
+## Layout note
+
+Three 108 mm chicken thighs at 40 mm centres merge into a single brown mass and
+read as one piece. They need spreading much further apart than instinct
+suggests before they resolve as three.

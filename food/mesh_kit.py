@@ -257,6 +257,55 @@ def crust(verts, faces, seed=1, mass=3.0, mass_freq=0.030, grain=1.5, grain_freq
     return v
 
 
+def frame_from_normal(normal, tangent_hint=None, rng=None):
+    """Orthonormal basis with +Z along `normal` and +X a tangent.
+
+    Used to lay an instanced piece of geometry flat against a surface: rice
+    grains lie tangent to the mound, corn kernels sit normal to the cob.
+    """
+    n = np.asarray(normal, dtype=float)
+    n = n / max(np.linalg.norm(n), 1e-9)
+
+    if tangent_hint is None:
+        if rng is None:
+            rng = np.random.default_rng(0)
+        tangent_hint = rng.normal(size=3)
+    t = np.asarray(tangent_hint, dtype=float)
+    t = t - n * float(np.dot(t, n))
+    norm = np.linalg.norm(t)
+    if norm < 1e-6:                       # hint was parallel to the normal
+        t = np.cross(n, [0.0, 0.0, 1.0] if abs(n[2]) < 0.9 else [1.0, 0.0, 0.0])
+        norm = np.linalg.norm(t)
+    t = t / max(norm, 1e-9)
+    b = np.cross(n, t)
+    return np.column_stack([t, b, n])     # columns are the local X, Y, Z axes
+
+
+def instance(verts, faces, placements):
+    """Replicate one mesh at many placements and merge into a single mesh.
+
+    `placements` is a sequence of (rotation 3x3, translation 3, scale) tuples.
+
+    Instancing is the honest way to get *individually visible* elements - rice
+    grains, corn kernels. Displacement cannot produce separate bodies no matter
+    how it is tuned; it can only push an existing surface around. Merging them
+    into one mesh keeps the glTF to a single primitive instead of thousands.
+    """
+    base_v = np.asarray(verts, dtype=float)
+    base_f = np.asarray(faces, dtype=np.int32)
+    n_v = len(base_v)
+
+    out_v = np.empty((n_v * len(placements), 3), dtype=float)
+    out_f = np.empty((len(base_f) * len(placements), 3), dtype=np.int32)
+
+    for i, (rot, trans, scale) in enumerate(placements):
+        scaled = base_v * np.asarray(scale, dtype=float)
+        out_v[i * n_v:(i + 1) * n_v] = scaled @ np.asarray(rot, dtype=float).T + np.asarray(trans, dtype=float)
+        out_f[i * len(base_f):(i + 1) * len(base_f)] = base_f + i * n_v
+
+    return out_v, out_f
+
+
 # --------------------------------------------------------------------------
 # GLB writer
 # --------------------------------------------------------------------------

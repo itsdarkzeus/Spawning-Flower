@@ -153,3 +153,65 @@ def herb(verts, faces, seed=61, blade=(0.23, 0.37, 0.13), vein=(0.33, 0.47, 0.19
     span = max(np.abs(y).max(), 1e-6)
     centre = 1.0 - np.clip(np.abs(y) / span, 0.0, 1.0)
     return np.clip(_mix(blade, vein, centre * 0.5), 0.0, 1.0)
+
+
+# --------------------------------------------------------------------------
+# grilled chicken / corn / jollof
+# --------------------------------------------------------------------------
+
+def chicken(verts, faces, seed=21,
+            meat=(0.42, 0.16, 0.05), caramel=(0.56, 0.24, 0.06),
+            char=(0.045, 0.035, 0.030)):
+    """Charred grilled skin: caramelised red-brown with black char patches.
+
+    Char comes from two fields: broad scorched patches, and bands across the
+    piece for the grill bars. Both are pushed through hard smoothsteps - char
+    is black or it is not there, it does not fade gently.
+    """
+    from mesh_kit import ridged as _ridged
+
+    normals = vertex_normals(verts, faces)
+    up = np.clip(normals[:, 2], 0.0, 1.0)
+
+    glaze = _unit(fbm(verts, octaves=3, frequency=0.10, seed=seed))
+    col = _mix(meat, caramel, _smoothstep(0.35, 0.72, glaze))
+
+    patches = _unit(fbm(verts, octaves=3, frequency=0.075, seed=seed + 91))
+    col = _mix_arr(col, char, 0.95 * _smoothstep(0.44, 0.64, patches) * up)
+
+    bars = _unit(fbm(verts * np.array([1.0, 0.12, 0.12]), octaves=2,
+                     frequency=0.070, seed=seed + 51))
+    col = _mix_arr(col, char, 0.85 * _smoothstep(0.52, 0.68, bars) * up)
+
+    # Blister crowns catch the light and stay glossy caramel, so darken only
+    # the crevices between them.
+    blister = _ridged(verts, octaves=3, frequency=0.26, seed=seed, sharpness=2.4)
+    col = _mix_arr(col, char, 0.40 * _smoothstep(0.45, 0.10, blister))
+    return np.clip(col, 0.0, 1.0)
+
+
+def corn(verts, faces, seed=71, kernel=(0.72, 0.50, 0.10),
+         bright=(0.84, 0.66, 0.20), char=(0.06, 0.05, 0.04), radius=21.0):
+    """Grilled corn: yellow kernels, char on the raised outer edges.
+
+    The char is gated on distance from the cob axis, so it lands on the kernel
+    crowns that actually touched the grill rather than washing into the valleys
+    between them.
+    """
+    r = np.hypot(verts[:, 1], verts[:, 2])
+    crown = _smoothstep(radius - 3.0, radius + 0.6, r)
+
+    n = _unit(fbm(verts, octaves=3, frequency=0.13, seed=seed))
+    col = _mix(kernel, bright, _smoothstep(0.35, 0.70, n))
+
+    scorch = _unit(fbm(verts * np.array([1.0, 0.5, 0.5]), octaves=2,
+                       frequency=0.085, seed=seed + 37))
+    return np.clip(_mix_arr(col, char, 0.88 * crown * _smoothstep(0.56, 0.74, scorch)), 0.0, 1.0)
+
+
+def jollof(verts, faces, seed=81, base=(0.66, 0.30, 0.07),
+           light=(0.78, 0.42, 0.11), deep=(0.44, 0.17, 0.04)):
+    """Jollof grains: tomato-orange with grain-to-grain colour variation."""
+    n = _unit(fbm(verts, octaves=3, frequency=0.28, seed=seed))
+    col = _mix(deep, base, _smoothstep(0.20, 0.55, n))
+    return np.clip(_mix_arr(col, light, _smoothstep(0.62, 0.90, n)), 0.0, 1.0)

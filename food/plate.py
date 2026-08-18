@@ -88,3 +88,62 @@ def gen_step():
 
 if __name__ == "__main__":
     gen_step()
+
+
+# --------------------------------------------------------------------------
+# wide-rimmed dark plate
+# --------------------------------------------------------------------------
+
+RIMMED_DIA = 310.0
+RIMMED_RIM_Z = 26.0
+RIMMED_EDGE_T = 8.5          # visible thickness at the outer edge
+
+
+def make_rimmed_plate():
+    """A wide flat-rimmed plate with a deep well and a thick outer edge.
+
+    Same single-closed-wire discipline as the coupe plate: every underside
+    station must stay below the top curve, or the revolve silently produces a
+    stunted plate instead of failing.
+    """
+    r_out = RIMMED_DIA / 2.0
+    r_foot = 56.0
+
+    with BuildPart() as plate:
+        with BuildSketch(Plane.XZ) as profile:
+            with BuildLine() as outline:
+                top = Spline(
+                    (0.0, 10.0),
+                    (70.0, 10.4),
+                    (95.0, 11.8),
+                    (112.0, 20.0),
+                    (124.0, 25.4),
+                    (r_out, RIMMED_RIM_Z),
+                )
+                under = Polyline(
+                    (r_out, RIMMED_RIM_Z),
+                    (r_out, RIMMED_RIM_Z - RIMMED_EDGE_T),
+                    (150.0, 15.0),
+                    (124.0, 12.6),
+                    (100.0, 6.4),
+                    (72.0, 4.6),
+                    (r_foot + 4.0, 4.2),
+                    (r_foot, 4.2),
+                    (r_foot, 0.0),
+                    (r_foot - 10.0, 0.0),
+                    (r_foot - 10.0, 4.2),
+                    (30.0, 4.5),
+                    (0.0, 4.6),
+                )
+                Line(under @ 1, top @ 0)
+
+            wires = outline.line.wires()
+            if len(wires) != 1 or not wires[0].is_closed:
+                raise ValueError(
+                    f"rimmed plate profile made {len(wires)} wire(s); the "
+                    "underside probably crosses the top surface"
+                )
+            make_face()
+        revolve(axis=Axis.Z)
+
+    return plate.part
