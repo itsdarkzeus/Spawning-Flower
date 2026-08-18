@@ -306,6 +306,34 @@ def instance(verts, faces, placements):
     return out_v, out_f
 
 
+def split_faces(verts, faces, vertex_mask, threshold=0.5):
+    """Split a mesh in two by a per-vertex field.
+
+    glTF allows one roughness per material, so a surface that is glossy in
+    places and matte in others cannot be expressed on a single primitive.
+    Splitting the triangles by the same field that drives the colour lets each
+    half carry its own material - charred skin matte, caramelised glaze wet.
+
+    Returns ((verts, faces, vertex_index), ...) for the at-or-above half first,
+    then the below half. The index arrays map back into the original vertex
+    order so per-vertex colours can be sliced to match.
+    """
+    mask = np.asarray(vertex_mask, dtype=float)
+    face_value = mask[faces].mean(axis=1)
+    hot = face_value >= threshold
+
+    def compact(selected):
+        sub = faces[selected]
+        if len(sub) == 0:
+            return np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int32), np.zeros(0, dtype=np.int64)
+        used = np.unique(sub)
+        remap = np.full(len(verts), -1, dtype=np.int64)
+        remap[used] = np.arange(len(used))
+        return verts[used], remap[sub].astype(np.int32), used
+
+    return compact(hot), compact(~hot)
+
+
 # --------------------------------------------------------------------------
 # GLB writer
 # --------------------------------------------------------------------------

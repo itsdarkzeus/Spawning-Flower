@@ -159,6 +159,30 @@ def herb(verts, faces, seed=61, blade=(0.23, 0.37, 0.13), vein=(0.33, 0.47, 0.19
 # grilled chicken / corn / jollof
 # --------------------------------------------------------------------------
 
+def chicken_char(verts, faces, seed=21):
+    """How charred each vertex is, 0-1.
+
+    Shared by the colouring and by the material split, so the matte half of the
+    mesh is exactly the half that looks burnt.
+
+    Blotches dominate and the grill bars are broken up by a second field. Bars
+    alone read as zebra stripes; real grill marks are interrupted wherever the
+    meat did not sit flat on the bar.
+    """
+    normals = vertex_normals(verts, faces)
+    up = np.clip(normals[:, 2], 0.0, 1.0)
+
+    patches = _unit(fbm(verts, octaves=4, frequency=0.055, seed=seed + 91))
+    blotch = _smoothstep(0.46, 0.70, patches)
+
+    bars = _unit(fbm(verts * np.array([1.0, 0.10, 0.10]), octaves=2,
+                     frequency=0.062, seed=seed + 51))
+    breakup = _unit(fbm(verts, octaves=3, frequency=0.16, seed=seed + 173))
+    bar = _smoothstep(0.56, 0.74, bars) * _smoothstep(0.30, 0.62, breakup)
+
+    return np.clip(blotch * 0.95 + bar * 0.55, 0.0, 1.0) * up
+
+
 def chicken(verts, faces, seed=21,
             meat=(0.42, 0.16, 0.05), caramel=(0.56, 0.24, 0.06),
             char=(0.045, 0.035, 0.030)):
@@ -176,12 +200,7 @@ def chicken(verts, faces, seed=21,
     glaze = _unit(fbm(verts, octaves=3, frequency=0.10, seed=seed))
     col = _mix(meat, caramel, _smoothstep(0.35, 0.72, glaze))
 
-    patches = _unit(fbm(verts, octaves=3, frequency=0.075, seed=seed + 91))
-    col = _mix_arr(col, char, 0.95 * _smoothstep(0.44, 0.64, patches) * up)
-
-    bars = _unit(fbm(verts * np.array([1.0, 0.12, 0.12]), octaves=2,
-                     frequency=0.070, seed=seed + 51))
-    col = _mix_arr(col, char, 0.85 * _smoothstep(0.52, 0.68, bars) * up)
+    col = _mix_arr(col, char, 0.96 * chicken_char(verts, faces, seed))
 
     # Blister crowns catch the light and stay glossy caramel, so darken only
     # the crevices between them.

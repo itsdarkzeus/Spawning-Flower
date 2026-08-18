@@ -30,7 +30,7 @@ import grill
 import rice as R
 import shading
 from mesh_kit import (contact_shadow, curvature_ao, instance, roughen,
-                      subdivide, tessellate, weld, write_glb)
+                      split_faces, subdivide, tessellate, weld, write_glb)
 from plate import make_rimmed_plate
 
 HERE = Path(__file__).resolve().parent
@@ -72,17 +72,34 @@ THIGHS = [                      # x, y, spin, extra lift
     (10.0, -80.0, -26.0, 3.0),
 ]
 
-CORN = [                        # x, y, spin about Z
-    (-96.0, 34.0, 24.0),
-    (-64.0, 62.0, 38.0),
-    (-24.0, 80.0, 54.0),
-    (16.0, 86.0, 70.0),
+# Roll about each cob's own axis matters as much as the spin: four rounds at
+# the same roll read as a machined row rather than four pieces of corn.
+CORN = [                        # x, y, spin about Z, roll about cob axis, tilt
+    (-96.0, 34.0, 24.0, 12.0, -4.0),
+    (-64.0, 62.0, 38.0, 74.0, 3.0),
+    (-24.0, 80.0, 54.0, 138.0, -6.0),
+    (16.0, 86.0, 70.0, 201.0, 5.0),
 ]
 
 POT_AT = (86.0, 68.0)
 
 
-def _corn_round(x, y, spin):
+def _rot_z(deg):
+    a = np.radians(deg)
+    return np.array([[np.cos(a), -np.sin(a), 0.0], [np.sin(a), np.cos(a), 0.0], [0.0, 0.0, 1.0]])
+
+
+def _rot_y(deg):
+    a = np.radians(deg)
+    return np.array([[np.cos(a), 0.0, np.sin(a)], [0.0, 1.0, 0.0], [-np.sin(a), 0.0, np.cos(a)]])
+
+
+def _rot_x(deg):
+    a = np.radians(deg)
+    return np.array([[1.0, 0.0, 0.0], [0.0, np.cos(a), -np.sin(a)], [0.0, np.sin(a), np.cos(a)]])
+
+
+def _corn_round(x, y, spin, roll=0.0, tilt=0.0):
     """Core + kernel meshes for one cob round, placed on the plate."""
     core = grill.make_cob_core()
     cv, cf = weld(*tessellate(core, 0.20, 0.20))
@@ -90,12 +107,9 @@ def _corn_round(x, y, spin):
 
     # Lying on its side, so it rests at its outer radius.
     z = float(plate_height(x, y)) + grill.COB_RADIUS + 1.2
-    ang = np.radians(spin)
-    rot = np.array([[np.cos(ang), -np.sin(ang), 0.0],
-                    [np.sin(ang), np.cos(ang), 0.0],
-                    [0.0, 0.0, 1.0]])
+    rot = _rot_z(spin) @ _rot_y(tilt) @ _rot_x(roll)
     place = [(rot, np.array([x, y, z]), 1.0)]
-    return instance(cv, cf, place), instance(kv, kf, place)
+    return instance(cv, cf, place), instance(kv, kf, place), rot
 
 
 def _pot():
@@ -158,11 +172,21 @@ def build_glb(path=None):
             vcolors = np.tile(np.asarray(COL_PLATE, dtype=float), (len(v), 1))
 
         elif label.startswith("chicken"):
+            seed = 21 + index * 7
             v, f = weld(*tessellate(solid, 0.12, 0.14))
             v, f = subdivide(v, f, 3)
-            v = grill.char_skin(v, f, seed=21 + index * 7)
-            vcolors = shading.chicken(v, f, seed=21 + index * 7)
-            rough = 0.24                      # glossy caramelised glaze
+            v = grill.char_skin(v, f, seed=seed)
+            colours = shading.chicken(v, f, seed=seed)
+
+            # One glTF material carries one roughness, so a surface that is wet
+            # where it is glazed and dry where it is burnt cannot be a single
+            # primitive. Split it on the same char field that drives the colour.
+            mask = shading.chicken_char(v, f, seed=seed)
+            (bv, bf, bi), (gv, gf, gi) = split_faces(v, f, mask, 0.42)
+            if len(bf):
+                built.append([f"{label}_char", bv, bf, col, 0.68, colours[bi]])
+            built.append([f"{label}_glaze", gv, gf, col, 0.22, colours[gi]])
+            continue
 
         elif label == "rice_core":
             v, f = weld(*tessellate(solid, 0.4, 0.4))
@@ -198,11 +222,14 @@ def build_glb(path=None):
     built.append(["rice_crown", cv, cf, COL_ONION, 0.55,
                   np.tile(np.asarray(COL_ONION, dtype=float), (len(cv), 1))])
 
-    for i, (x, y, spin) in enumerate(CORN, start=1):
-        (cob_v, cob_f), (ker_v, ker_f) = _corn_round(x, y, spin)
+    for i, (x, y, spin, roll, tilt) in enumerate(CORN, start=1):
+        (cob_v, cob_f), (ker_v, ker_f), rot = _corn_round(x, y, spin, roll, tilt)
         built.append([f"cob_{i}", cob_v, cob_f, COL_COB, 0.70,
                       np.tile(np.asarray(COL_COB, dtype=float), (len(cob_v), 1))])
-        local = ker_v - np.array([x, y, float(plate_height(x, y)) + grill.COB_RADIUS + 1.2])
+        # Char is gated on distance from the cob AXIS, so the shading field has
+        # to be evaluated in the cob's own frame, not the plate's.
+        origin = np.array([x, y, float(plate_height(x, y)) + grill.COB_RADIUS + 1.2])
+        local = (ker_v - origin) @ rot
         built.append([f"kernels_{i}", ker_v, ker_f, COL_CORN, 0.42,
                       shading.corn(local, ker_f, seed=71 + i * 5)])
 

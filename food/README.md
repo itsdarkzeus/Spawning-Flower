@@ -306,8 +306,30 @@ swallowing the grain shell entirely. `loft(ruled=True)` builds straight
 segments between sections and fixes it. Worth suspecting whenever a lofted part
 comes out larger than its own control points.
 
+## Splitting a mesh to get two roughnesses
+
+glTF carries **one roughness per material**, so a surface that is wet where it
+is glazed and dry where it is burnt cannot be a single primitive. The chicken
+is therefore split in two by `mesh_kit.split_faces()`, using the *same* char
+field that drives its colour (`shading.chicken_char`) - so the matte half is
+exactly the half that looks burnt. Char goes out at roughness 0.68, glaze at
+0.22.
+
+`split_faces` returns the vertex index arrays alongside each half, so the
+per-vertex colours computed once on the whole mesh can be sliced to match
+rather than recomputed.
+
 ## Layout note
 
 Three 108 mm chicken thighs at 40 mm centres merge into a single brown mass and
 read as one piece. They need spreading much further apart than instinct
 suggests before they resolve as three.
+
+Corn rounds need varied **roll about their own axis**, not just varied spin
+about Z. Four rounds sharing a roll angle put their char in the same place and
+read as a machined row rather than four pieces of corn.
+
+Grill marks modelled as bands alone read as zebra stripes. Real char is
+blotchy, with the bars interrupted wherever the meat did not sit flat on the
+bar - so the char field is mostly irregular blotches with the bars secondary
+and broken up by a second noise field.
