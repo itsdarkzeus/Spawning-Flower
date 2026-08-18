@@ -35,7 +35,7 @@ from plate import WELL_DEPTH, make_plate
 HERE = Path(__file__).resolve().parent
 
 # --- palette, sRGB (the writer converts to linear) --------------------------
-COL_PLATE = (0.955, 0.955, 0.945)
+COL_PLATE = (0.80, 0.80, 0.79)
 COL_FISH = (0.70, 0.47, 0.23)
 COL_LEEK = (0.29, 0.41, 0.15)
 COL_LEEK_PALE = (0.87, 0.88, 0.74)
@@ -185,8 +185,8 @@ def build_glb(path=None, preview=None):
         elif label == "sauce_red":
             vcolors = shading.sauce(v, f, seed=51)
         elif label == "sauce_green":
-            vcolors = shading.sauce(v, f, seed=57, base=(0.50, 0.66, 0.24),
-                                    deep=(0.24, 0.38, 0.12), thin=(0.66, 0.79, 0.36))
+            vcolors = shading.sauce(v, f, seed=57, base=(0.31, 0.43, 0.12),
+                                    deep=(0.16, 0.25, 0.06), thin=(0.42, 0.54, 0.19))
         elif label.startswith("herb"):
             vcolors = shading.herb(v, f, seed=61 + index)
 

@@ -90,8 +90,34 @@ The noise is seeded, so every rebuild produces exactly the same model.
 
 ```bash
 python meal_assembly.py                                   # GLB + preview
+python plated_fish.py                                     # GLB + preview
 python ../.claude/skills/cad/scripts/step meal_assembly.py  # STEP
 ```
+
+## Verifying — check the file, not the preview
+
+`tools/preview.py` renders the in-memory meshes. It is fast, and it is **not
+the deliverable**. It has disagreed with the shipped GLB twice: once over sRGB
+vs linear, once because glTF and three.js both multiply the material colour
+into vertex colours and the preview did not. Both times the preview looked
+right and the file did not.
+
+So judge colour and lighting from `tools/verify_glb.py`, which loads the
+written `.glb` through `THREE.GLTFLoader` — the same path any viewer takes —
+under rigs that approximate a consumer GLB viewer:
+
+```bash
+python tools/verify_glb.py plated_fish.glb --out render/verify.png --preset studio
+python tools/verify_glb.py plated_fish.glb --out render/verify.png --preset soft
+```
+
+`studio` is bright, frontal and untone-mapped, which is the setting that
+exposes washed-out albedo. If it holds up there it holds up anywhere.
+
+**Author albedo dark.** Under a bright studio rig anything above roughly 0.7
+blows to white. Cooked-food albedo peaks nearer 0.4–0.55, and the palettes in
+`shading.py` are set accordingly — they look too dark in isolation and correct
+once lit.
 
 Needs `build123d`, `cadpy`, `numpy`, and `playwright` for previews only.
 

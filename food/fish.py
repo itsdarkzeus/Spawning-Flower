@@ -80,7 +80,7 @@ def make_fillet(sections=FILLET_SECTIONS, length: float = FILLET_LENGTH):
 
 def sear(verts, faces, seed=11, grain=0.95, grain_freq=0.11,
          mottle=0.48, mottle_freq=0.32, crisp=0.22, crisp_freq=0.75,
-         seam_depth=1.7, seam_width=7.0):
+         seam_depth=2.4, seam_width=6.5):
     """Seared surface: grain along the length, mottling, and a centre seam.
 
     `axis_scale` compresses the noise sample along X so the features elongate

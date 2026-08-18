@@ -42,7 +42,7 @@ def _unit(x):
 # --------------------------------------------------------------------------
 
 def fish(verts, faces, seed=11,
-         pale=(0.83, 0.70, 0.46), gold=(0.70, 0.49, 0.24), brown=(0.42, 0.25, 0.11)):
+         pale=(0.62, 0.45, 0.25), gold=(0.46, 0.28, 0.12), brown=(0.26, 0.14, 0.06)):
     """Seared fillet: gold overall, browner in the seared patches and at edges.
 
     Two contributions. A patchy browning field follows the grain, so the darker
@@ -56,16 +56,32 @@ def fish(verts, faces, seed=11,
     patch = _smoothstep(0.28, 0.66, grain)
 
     normals = vertex_normals(verts, faces)
-    edge = 1.0 - np.abs(normals[:, 2])
-
     col = _mix(pale, gold, patch)
-    col = col * (1.0 - 0.50 * edge[:, None]) + np.asarray(brown)[None, :] * (0.50 * edge[:, None])
+
+    # Browned border. Doing this from the surface normal only darkens the
+    # silhouette, which is nearly invisible from directly above - and top-down
+    # is how a plated dish is photographed. So the falloff is a 2D elliptical
+    # distance from the fillet's centreline instead, which paints a visible
+    # band around the edge of the top face.
+    ax = max(np.abs(verts[:, 0]).max(), 1e-6)
+    ay = max(np.abs(verts[:, 1]).max(), 1e-6)
+    radial = np.sqrt((verts[:, 0] / ax) ** 2 + (verts[:, 1] / ay) ** 2)
+    border = _smoothstep(0.58, 1.0, radial)
+    col = _mix_arr(col, brown, 0.80 * border)
+
+    # Plus the true silhouette, which catches the sides in an angled view.
+    rim = np.power(1.0 - np.abs(normals[:, 2]), 1.6)
+    col = _mix_arr(col, brown, 0.55 * rim)
+
+    # The centre seam reads as a dark line, not just a groove.
+    seam = np.exp(-(verts[:, 1] / 5.0) ** 2) * np.clip(normals[:, 2], 0.0, 1.0)
+    col = _mix_arr(col, brown, 0.60 * seam)
     return np.clip(col, 0.0, 1.0)
 
 
 def leek(verts, faces, seed=31, length_axis=0,
-         green=(0.40, 0.53, 0.22), tip=(0.30, 0.44, 0.16),
-         root=(0.90, 0.91, 0.78), char=(0.07, 0.07, 0.06)):
+         green=(0.22, 0.34, 0.10), tip=(0.15, 0.25, 0.07),
+         root=(0.72, 0.74, 0.60), char=(0.04, 0.04, 0.03)):
     """Charred leek: pale at the root, green along the stalk, black char bands.
 
     The root-to-tip gradient replaces what used to be a mesh split - one mesh
@@ -79,14 +95,14 @@ def leek(verts, faces, seed=31, length_axis=0,
     span = max(x.max() - x.min(), 1e-6)
     t = (x - x.min()) / span
 
-    col = _mix(root, green, _smoothstep(0.10, 0.34, t))
+    col = _mix(root, green, _smoothstep(0.02, 0.13, t))
     col = col * (1.0 - _smoothstep(0.55, 1.0, t)[:, None]) + \
         np.asarray(tip)[None, :] * _smoothstep(0.55, 1.0, t)[:, None]
 
     scorch = _unit(fbm(verts * np.array([0.55, 1.0, 1.0]), octaves=3,
                        frequency=0.11, seed=seed))
     # Only the stalk chars, not the pale root end.
-    burn = _smoothstep(0.62, 0.82, scorch) * _smoothstep(0.18, 0.40, t)
+    burn = _smoothstep(0.50, 0.74, scorch) * _smoothstep(0.10, 0.24, t)
     return np.clip(_mix_arr(col, char, burn), 0.0, 1.0)
 
 
@@ -97,8 +113,8 @@ def _mix_arr(col, colour_b, t):
 
 
 def tomato(verts, faces, seed=41,
-           skin=(0.70, 0.11, 0.08), bright=(0.82, 0.22, 0.10),
-           blister=(0.26, 0.07, 0.05)):
+           skin=(0.46, 0.06, 0.04), bright=(0.60, 0.13, 0.07),
+           blister=(0.13, 0.035, 0.03)):
     """Roasted cherry tomato: red skin with blackened blistered spots."""
     n = _unit(fbm(verts, octaves=3, frequency=0.16, seed=seed))
     col = _mix(skin, bright, _smoothstep(0.35, 0.62, n))
@@ -106,8 +122,8 @@ def tomato(verts, faces, seed=41,
     return np.clip(_mix_arr(col, blister, burst), 0.0, 1.0)
 
 
-def sauce(verts, faces, seed=51, base=(0.72, 0.22, 0.06), deep=(0.44, 0.11, 0.03),
-          thin=(0.83, 0.38, 0.14), axis_scale=(0.10, 1.0, 1.0)):
+def sauce(verts, faces, seed=51, base=(0.50, 0.12, 0.035), deep=(0.28, 0.055, 0.02),
+          thin=(0.62, 0.24, 0.08), axis_scale=(0.10, 1.0, 1.0)):
     """Sauce: darker where it pools, thinner and lighter along the comb streaks.
 
     Uses the same anisotropic field as the displacement, so the colour bands
@@ -119,7 +135,7 @@ def sauce(verts, faces, seed=51, base=(0.72, 0.22, 0.06), deep=(0.44, 0.11, 0.03
     return np.clip(_mix_arr(col, thin, _smoothstep(0.68, 0.92, n)), 0.0, 1.0)
 
 
-def herb(verts, faces, seed=61, blade=(0.38, 0.56, 0.24), vein=(0.52, 0.68, 0.34)):
+def herb(verts, faces, seed=61, blade=(0.23, 0.37, 0.13), vein=(0.33, 0.47, 0.19)):
     """Micro herb leaf: slightly paler towards the centre line."""
     y = verts[:, 1]
     span = max(np.abs(y).max(), 1e-6)
