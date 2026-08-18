@@ -67,30 +67,28 @@ def lofted_lobe(sections, length, flatten=None):
 # charred leek / spring onion batons
 # --------------------------------------------------------------------------
 
+# Halved leek stalks are thin and flattened, roughly 11 mm across and 7 mm
+# tall once the underside is sliced. An earlier version at 17 mm diameter read
+# as cucumber.
 LEEK_SECTIONS = [
-    (0.00, 5.4, 5.0, 0.0),
-    (0.14, 7.6, 7.0, 0.6),
-    (0.40, 8.4, 7.8, 1.2),
-    (0.68, 8.0, 7.4, 0.8),
-    (0.88, 6.8, 6.2, -0.4),
-    (1.00, 4.6, 4.2, -1.2),
+    (0.00, 3.2, 2.6, 0.0),
+    (0.14, 5.0, 3.9, 0.4),
+    (0.40, 5.6, 4.3, 0.8),
+    (0.68, 5.4, 4.1, 0.5),
+    (0.88, 4.6, 3.5, -0.3),
+    (1.00, 3.0, 2.4, -0.8),
 ]
 
 
-def make_leek(length=126.0, split_at=0.78):
+def make_leek(length=126.0):
     """A halved leek baton, flat side down.
 
-    Returns (green_part, pale_part). Real leeks go pale towards the root, and
-    with one flat colour per mesh the only way to show that is to cut the solid
-    in two and give each half its own material.
+    One solid. An earlier version cut the baton in two so the pale root could
+    have its own material, which was a workaround for having a single flat
+    colour per mesh. With per-vertex colour the root gradient and the char
+    bands both live in `shading.leek`, and the extra geometry is unnecessary.
     """
-    baton = lofted_lobe(LEEK_SECTIONS, length, flatten=3.0)
-    box = baton.bounding_box()
-    cut_x = box.min.X + (box.max.X - box.min.X) * split_at
-
-    knife = Box(2000.0, 400.0, 400.0, align=(Align.MIN, Align.CENTER, Align.CENTER))
-    beyond = Pos(cut_x, 0.0, 0.0) * knife
-    return (baton - beyond), (baton & beyond)
+    return lofted_lobe(LEEK_SECTIONS, length, flatten=1.6)
 
 
 # --------------------------------------------------------------------------
@@ -150,16 +148,16 @@ def make_leek_curl(turns=1.5, r_start=18.0, r_end=7.0, rise=10.0,
 # --------------------------------------------------------------------------
 
 TOMATO_SECTIONS = [
-    (0.00,  4.0,  3.4, 0.0),
-    (0.16, 10.0,  8.6, 0.0),
-    (0.40, 13.2, 11.4, 0.0),
-    (0.62, 13.4, 11.6, 0.0),
-    (0.84,  9.8,  8.4, 0.0),
-    (1.00,  4.2,  3.6, 0.0),
+    (0.00,  3.4,  3.0, 0.0),
+    (0.16,  8.6,  7.6, 0.0),
+    (0.40, 11.2, 10.0, 0.0),
+    (0.62, 11.4, 10.2, 0.0),
+    (0.84,  8.4,  7.4, 0.0),
+    (1.00,  3.6,  3.2, 0.0),
 ]
 
 
-def make_tomato(length=26.0):
+def make_tomato(length=22.0):
     """A roasted cherry tomato: near-spherical, slightly slumped, flat-based."""
     return lofted_lobe(TOMATO_SECTIONS, length, flatten=2.2)
 
@@ -168,16 +166,17 @@ def make_tomato(length=26.0):
 # micro herb leaves
 # --------------------------------------------------------------------------
 
+# Purslane-style micro leaves: rounded, not pointed ovals.
 LEAF_SECTIONS = [
-    (0.00, 0.9, 0.30, 0.0),
-    (0.22, 3.6, 0.72, 0.3),
-    (0.50, 4.6, 0.86, 0.0),
-    (0.78, 3.4, 0.68, -0.3),
-    (1.00, 0.8, 0.26, -0.6),
+    (0.00, 1.2, 0.25, 0.0),
+    (0.25, 4.4, 0.55, 0.2),
+    (0.55, 5.0, 0.62, 0.0),
+    (0.82, 3.8, 0.50, -0.2),
+    (1.00, 1.0, 0.22, -0.4),
 ]
 
 
-def make_leaf(length=15.0):
+def make_leaf(length=13.0):
     return lofted_lobe(LEAF_SECTIONS, length)
 
 
@@ -185,35 +184,37 @@ def make_leaf(length=15.0):
 # sauces
 # --------------------------------------------------------------------------
 
+# Plated sauce is a thin film, 2-3 mm at most. Earlier versions stood 6.6 mm
+# proud and read as a slab of jelly rather than something spooned on.
 SMEAR_SECTIONS = [
-    (0.00,  4.0, 0.55, 0.0),
-    (0.18, 14.0, 1.60, 1.5),
-    (0.42, 22.0, 2.70, 1.0),
-    (0.66, 26.0, 3.30, -1.0),
-    (0.86, 21.0, 2.40, -2.5),
-    (1.00, 11.0, 1.10, -3.5),
+    (0.00,  5.0, 0.30, 0.0),
+    (0.18, 16.0, 0.90, 1.5),
+    (0.42, 25.0, 1.45, 1.0),
+    (0.66, 28.0, 1.65, -1.0),
+    (0.86, 22.0, 1.20, -2.5),
+    (1.00, 10.0, 0.55, -3.5),
 ]
 
 DOLLOP_SECTIONS = [
-    (0.00,  6.0, 0.7, 0.0),
-    (0.22, 21.0, 2.6, 0.0),
-    (0.50, 26.0, 3.6, 0.0),
-    (0.78, 22.0, 2.8, 0.0),
-    (1.00, 10.0, 1.0, 0.0),
+    (0.00,  5.0, 0.50, 0.0),
+    (0.22, 17.0, 1.60, 0.0),
+    (0.50, 21.0, 2.10, 0.0),
+    (0.78, 17.0, 1.60, 0.0),
+    (1.00,  8.0, 0.70, 0.0),
 ]
 
 
-def make_smear(length=152.0):
+def make_smear(length=158.0):
     """Red pepper smear: a tapered lens, flat on the plate."""
     return lofted_lobe(SMEAR_SECTIONS, length, flatten=0.01)
 
 
-def make_dollop(length=66.0):
+def make_dollop(length=52.0):
     """Herb oil puddle: rounder and shallower than the smear."""
     return lofted_lobe(DOLLOP_SECTIONS, length, flatten=0.01)
 
 
-def comb(verts, faces, seed=5, amplitude=0.55, frequency=0.30):
+def comb(verts, faces, seed=5, amplitude=0.32, frequency=0.34):
     """Streaks running along the smear, as if dragged with the back of a spoon."""
     from mesh_kit import roughen
 

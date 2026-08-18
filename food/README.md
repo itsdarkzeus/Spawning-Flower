@@ -97,11 +97,21 @@ Needs `build123d`, `cadpy`, `numpy`, and `playwright` for previews only.
 
 ## Notes and limits
 
-1. **Flat colours, no textures.** The GLB carries one PBR base colour per mesh —
-   no albedo maps, no roughness maps, no UVs, no normal maps. Good enough for a
-   diagram, a game prop or a print; for a photoreal render, take it into
-   Blender and add materials. Food lives or dies on subsurface scattering and
-   texture, and none of that exists here.
+1. **Per-vertex colour, no textures.** Meshes can vary in colour across their
+   surface via glTF's `COLOR_0` attribute, which needs no textures and no UVs —
+   see `shading.py`. That is what produces the char bands on the leeks, the
+   browning on the fillet and the density variation in the sauces. The meal box
+   predates this and still uses one flat colour per mesh.
+
+   Two rules: `COLOR_0` is **linear**, like `baseColorFactor`, so the writer
+   converts from sRGB; and when vertex colours are present the material factor
+   must be **white**, because glTF multiplies the two. The same multiply exists
+   in three.js, so `tools/preview.py` whites out its material colour too —
+   otherwise the preview shows something darker and more saturated than the
+   file, which is exactly the trap that made the fillet look orange.
+
+   Still absent: roughness maps, normal maps, and any subsurface scattering.
+   For a photoreal render, take the GLB into Blender.
 2. **Colours are converted sRGB -> linear on export.** glTF defines
    `baseColorFactor` in *linear* space, but palettes get picked in sRGB. Writing
    sRGB values straight through makes every material render washed out, because

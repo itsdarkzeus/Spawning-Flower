@@ -34,19 +34,23 @@ from build123d import (
 )
 
 # (length fraction, half-width, half-height, lateral lean)
+# A sole/plaice fillet is FLAT - roughly 190 x 62 x 13 mm. An earlier version
+# ran 24 mm thick and read as a chicken tender rather than fish; the thickness
+# of these sections is the single thing that decides whether the silhouette is
+# right.
 FILLET_SECTIONS = [
-    (0.00,  5.0,  2.2,  0.0),   # tail tip
-    (0.10, 13.0,  5.4,  1.5),
-    (0.26, 22.0,  9.6,  2.5),
-    (0.44, 27.5, 11.8,  1.5),
-    (0.62, 29.0, 12.2, -0.5),
-    (0.80, 26.0, 10.6, -2.0),
-    (0.92, 19.0,  7.4, -2.5),
-    (1.00, 10.0,  4.0, -2.0),
+    (0.00,  4.0, 1.2,  0.0),   # tail tip
+    (0.10, 14.0, 3.4,  1.2),
+    (0.26, 24.0, 5.2,  2.2),
+    (0.46, 30.0, 6.4,  1.2),
+    (0.64, 31.0, 6.6, -0.5),
+    (0.80, 27.0, 5.8, -1.6),
+    (0.92, 18.0, 4.0, -2.2),
+    (1.00,  8.0, 2.0, -2.2),
 ]
 
-FILLET_LENGTH = 178.0
-UNDERCUT = 3.2          # how much of the rounded underside is sliced flat
+FILLET_LENGTH = 190.0
+UNDERCUT = 1.8          # how much of the rounded underside is sliced flat
 
 
 def make_fillet(sections=FILLET_SECTIONS, length: float = FILLET_LENGTH):
@@ -74,9 +78,9 @@ def make_fillet(sections=FILLET_SECTIONS, length: float = FILLET_LENGTH):
     return Pos(-box.center().X, -box.center().Y, -box.min.Z) * piece
 
 
-def sear(verts, faces, seed=11, grain=2.2, grain_freq=0.10,
-         mottle=1.1, mottle_freq=0.30, crisp=0.45, crisp_freq=0.72,
-         seam_depth=3.8, seam_width=8.0):
+def sear(verts, faces, seed=11, grain=0.95, grain_freq=0.11,
+         mottle=0.48, mottle_freq=0.32, crisp=0.22, crisp_freq=0.75,
+         seam_depth=1.7, seam_width=7.0):
     """Seared surface: grain along the length, mottling, and a centre seam.
 
     `axis_scale` compresses the noise sample along X so the features elongate

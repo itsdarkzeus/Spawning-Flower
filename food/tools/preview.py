@@ -49,11 +49,22 @@ for (const p of PRIMS) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(pos,3));
   g.setIndex(new THREE.BufferAttribute(idx,1));
+  if (p.colOffset !== null && p.colOffset !== undefined) {
+    const col = new Float32Array(BUF, p.colOffset, p.colCount*3);
+    g.setAttribute("color", new THREE.BufferAttribute(col,3));
+  }
   g.computeVertexNormals();
+  // When vertex colours are present they carry the whole colour. three.js
+  // MULTIPLIES the material colour into them, so it has to be white here or
+  // the preview shows something darker and more saturated than the GLB, whose
+  // baseColorFactor is set to white for exactly the same reason.
+  const hasVC = (p.colOffset !== null && p.colOffset !== undefined);
   const m = new THREE.MeshStandardMaterial({
-    color:new THREE.Color(p.color[0],p.color[1],p.color[2]),
+    color: hasVC ? new THREE.Color(1,1,1)
+                 : new THREE.Color(p.color[0],p.color[1],p.color[2]),
     roughness:p.roughness!==undefined?p.roughness:0.78, metalness:0.02,
-    side:THREE.DoubleSide, flatShading:!!p.flat
+    side:THREE.DoubleSide, flatShading:!!p.flat,
+    vertexColors: hasVC
   });
   const mesh = new THREE.Mesh(g,m); scene.add(mesh);
   box.expandByObject(mesh);
@@ -81,7 +92,13 @@ def _pack(primitives):
         faces = np.asarray(p["faces"], dtype=np.uint32).reshape(-1)
         pos_bytes = verts.tobytes()
         idx_bytes = faces.tobytes()
+        vcol = p.get("vcolors")
+        vcol_bytes = b""
+        if vcol is not None:
+            vcol_bytes = np.asarray(vcol, dtype=np.float32).tobytes()
         meta.append({
+            "colOffset": (len(blob) + len(pos_bytes) + len(idx_bytes)) if vcol is not None else None,
+            "colCount": len(verts) if vcol is not None else 0,
             "name": p.get("name", "part"),
             "color": list(p.get("color", (0.7, 0.7, 0.7))),
             "roughness": p.get("roughness", 0.78),
@@ -89,7 +106,7 @@ def _pack(primitives):
             "posOffset": len(blob), "posCount": len(verts),
             "idxOffset": len(blob) + len(pos_bytes), "idxCount": len(faces),
         })
-        blob += pos_bytes + idx_bytes
+        blob += pos_bytes + idx_bytes + vcol_bytes
         while len(blob) % 4:
             blob += b"\x00"
     return bytes(blob), meta

@@ -199,6 +199,12 @@ def write_glb(path, primitives, y_up: bool = True, scale: float = 0.001):
     color (r,g,b) 0-1 **in sRGB**, and optional roughness / metallic.
     Colours are converted to linear on the way out, per the glTF spec.
 
+    A primitive may also carry `vcolors`, an Nx3 array of per-vertex sRGB
+    colours. These are written as a COLOR_0 attribute, which glTF multiplies
+    into the base colour - so `baseColorFactor` is set to white and the vertex
+    colours carry the whole thing. This is how char marks, browning gradients
+    and sauce density variation get expressed without any texture at all.
+
     glTF convention is metres and Y-up, so millimetre Z-up CAD coordinates are
     converted here: scale by 0.001 and map (x, y, z) -> (x, z, -y).
     """
@@ -239,6 +245,24 @@ def write_glb(path, primitives, y_up: bool = True, scale: float = 0.001):
         })
         nrm_acc = len(accessors) - 1
 
+        # --- vertex colours (optional)
+        col_acc = None
+        vcol = prim.get("vcolors")
+        if vcol is not None:
+            rgba = np.ones((len(pos), 4), dtype=np.float32)
+            lin = np.vectorize(srgb_to_linear)(np.asarray(vcol, dtype=float))
+            rgba[:, :3] = lin.reshape(-1, 3)
+            _pad(bin_buf)
+            off = len(bin_buf)
+            bin_buf += rgba.tobytes()
+            buffer_views.append({"buffer": 0, "byteOffset": off,
+                                 "byteLength": rgba.nbytes, "target": 34962})
+            accessors.append({
+                "bufferView": len(buffer_views) - 1, "componentType": 5126,
+                "count": len(rgba), "type": "VEC4",
+            })
+            col_acc = len(accessors) - 1
+
         # --- index accessor
         _pad(bin_buf)
         off = len(bin_buf)
@@ -250,8 +274,13 @@ def write_glb(path, primitives, y_up: bool = True, scale: float = 0.001):
         })
         idx_acc = len(accessors) - 1
 
-        # Palette entries are authored in sRGB; glTF wants linear.
-        r, g, b = (srgb_to_linear(c) for c in prim["color"])
+        # Palette entries are authored in sRGB; glTF wants linear. When vertex
+        # colours are present they carry the colour instead, and the factor
+        # must be white so it does not tint them.
+        if col_acc is not None:
+            r = g = b = 1.0
+        else:
+            r, g, b = (srgb_to_linear(c) for c in prim["color"])
         materials.append({
             "name": prim["name"] + "_mat",
             "pbrMetallicRoughness": {
@@ -261,10 +290,13 @@ def write_glb(path, primitives, y_up: bool = True, scale: float = 0.001):
             },
             "doubleSided": prim.get("double_sided", True),
         })
+        attributes = {"POSITION": pos_acc, "NORMAL": nrm_acc}
+        if col_acc is not None:
+            attributes["COLOR_0"] = col_acc
         meshes.append({
             "name": prim["name"],
             "primitives": [{
-                "attributes": {"POSITION": pos_acc, "NORMAL": nrm_acc},
+                "attributes": attributes,
                 "indices": idx_acc,
                 "material": len(materials) - 1,
             }],

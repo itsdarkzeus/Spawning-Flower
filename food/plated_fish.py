@@ -27,6 +27,7 @@ from build123d import Color, Pos, Rot
 from cadpy.assembly import AssemblyHelper
 
 import garnish as G
+import shading
 from fish import make_fillet, sear
 from mesh_kit import roughen, subdivide, tessellate, weld, write_glb
 from plate import WELL_DEPTH, make_plate
@@ -80,13 +81,15 @@ LEEK_PLACEMENTS = [
 # anything dropped inside that band disappears under it. These sit clear of it,
 # except the last one, lifted to rest ON the fillet as in the reference.
 HERB_PLACEMENTS = [
-    (72.0, 16.0, -30.0, 1.6),
-    (80.0, -14.0, 45.0, 1.6),
-    (56.0, -24.0, 20.0, 5.2),
-    (-54.0, -48.0, 26.0, 1.6),
-    (-72.0, 28.0, 66.0, 1.6),
-    (-34.0, -64.0, 8.0, 1.6),
-    (26.0, 34.0, 52.0, 24.0),
+    (62.0, 12.0, -30.0, 1.4),
+    (69.0, 2.0, 45.0, 1.4),
+    (58.0, -26.0, 20.0, 4.4),
+    (52.0, -34.0, -18.0, 4.0),
+    (-48.0, -46.0, 26.0, 1.4),
+    (-40.0, -54.0, -6.0, 1.4),
+    (-58.0, 30.0, 66.0, 1.4),
+    (22.0, 30.0, 52.0, 13.0),
+    (30.0, 12.0, -24.0, 13.0),
 ]
 
 
@@ -96,13 +99,10 @@ def _bodies():
 
     # Sauces first - they sit under everything and are partly hidden.
     out.append(("sauce_red", seat(2.0, 8.0, 26.0, sink=0.4) * G.make_smear(), COL_SAUCE_RED))
-    out.append(("sauce_green", seat(56.0, -22.0, -14.0, sink=0.3) * G.make_dollop(54.0), COL_SAUCE_GREEN))
+    out.append(("sauce_green", seat(58.0, -26.0, -14.0, sink=0.3) * G.make_dollop(42.0), COL_SAUCE_GREEN))
 
     for i, (x, y, spin) in enumerate(LEEK_PLACEMENTS, start=1):
-        green, pale = G.make_leek(length=118.0 + 9.0 * i)
-        loc = seat(x, y, spin)
-        out.append((f"leek_{i}_green", loc * green, COL_LEEK))
-        out.append((f"leek_{i}_pale", loc * pale, COL_LEEK_PALE))
+        out.append((f"leek_{i}", seat(x, y, spin) * G.make_leek(118.0 + 9.0 * i), COL_LEEK))
 
     out.append(("leek_curl", seat(-27.0, -8.0, 0.0, sink=-1.0) * G.make_leek_curl(), COL_CURL))
 
@@ -113,7 +113,7 @@ def _bodies():
     out.append(("fish_fillet", seat(14.0, 4.0, 68.0, sink=1.0) * make_fillet(), COL_FISH))
 
     for i, (x, y, spin, lift) in enumerate(HERB_PLACEMENTS, start=1):
-        out.append((f"herb_{i}", seat(x, y, spin, sink=-lift) * G.make_leaf(22.0), COL_HERB))
+        out.append((f"herb_{i}", seat(x, y, spin, sink=-lift) * G.make_leaf(11.5), COL_HERB))
 
     return out
 
@@ -140,7 +140,7 @@ def build_glb(path=None, preview=None):
             rough = 0.14
 
         elif label == "fish_fillet":
-            v, f = weld(*tessellate(solid, 0.10, 0.12))
+            v, f = weld(*tessellate(solid, 0.16, 0.16))
             v, f = subdivide(v, f, 2)
             v = sear(v, f, seed=11)
             rough = 0.42
@@ -171,7 +171,26 @@ def build_glb(path=None, preview=None):
             v, f = weld(*tessellate(solid, 0.14, 0.16))
             rough = 0.44
 
-        prims.append({"name": label, "verts": v, "faces": f,
+        # Per-vertex colour. The plate is the one thing left flat: a glaze is
+        # genuinely uniform, and variation on it reads as dirt.
+        vcolors = None
+        if label == "fish_fillet":
+            vcolors = shading.fish(v, f, seed=11)
+        elif label.startswith("leek_") and label != "leek_curl":
+            vcolors = shading.leek(v, f, seed=31 + index)
+        elif label == "leek_curl":
+            vcolors = shading.leek(v, f, seed=37, length_axis=2)
+        elif label.startswith("tomato"):
+            vcolors = shading.tomato(v, f, seed=41 + index)
+        elif label == "sauce_red":
+            vcolors = shading.sauce(v, f, seed=51)
+        elif label == "sauce_green":
+            vcolors = shading.sauce(v, f, seed=57, base=(0.50, 0.66, 0.24),
+                                    deep=(0.24, 0.38, 0.12), thin=(0.66, 0.79, 0.36))
+        elif label.startswith("herb"):
+            vcolors = shading.herb(v, f, seed=61 + index)
+
+        prims.append({"name": label, "verts": v, "faces": f, "vcolors": vcolors,
                       "color": col, "roughness": rough, "metallic": 0.0})
 
     size = write_glb(path, prims)
