@@ -156,6 +156,93 @@ def roughen(verts, faces, amplitude=2.4, frequency=0.075, octaves=4, seed=1,
     return verts + normals * delta[:, None]
 
 
+def ridged(points, octaves=4, frequency=0.3, lacunarity=2.1, gain=0.5, seed=1, sharpness=2.0):
+    """Ridged fractal noise: 1 - |fbm|, sharpened.
+
+    Ordinary fbm gives rounded lumps. Taking the absolute value and inverting
+    puts a crease wherever the field crosses zero, which is what reads as a
+    crisp flake edge or a crust ridge rather than a soft bump.
+    """
+    total = np.zeros(len(points))
+    amp, freq, norm = 1.0, frequency, 0.0
+    for o in range(octaves):
+        n = value_noise(points, freq, seed + o * 131) * 2.0 - 1.0
+        total += amp * np.power(1.0 - np.abs(n), sharpness)
+        norm += amp
+        amp *= gain
+        freq *= lacunarity
+    return total / max(norm, 1e-9)
+
+
+def neighbour_mean(verts, faces):
+    """Average position of each vertex's one-ring neighbours."""
+    total = np.zeros_like(verts)
+    count = np.zeros(len(verts))
+    for a, b in ((0, 1), (1, 2), (2, 0)):
+        i, j = faces[:, a], faces[:, b]
+        np.add.at(total, i, verts[j])
+        np.add.at(count, i, 1.0)
+        np.add.at(total, j, verts[i])
+        np.add.at(count, j, 1.0)
+    count[count == 0] = 1.0
+    return total / count[:, None]
+
+
+def curvature_ao(verts, faces, strength=1.0, scale=None, spread=3.0):
+    """Cheap ambient occlusion from local concavity.
+
+    Proper AO needs ray casting against the whole scene. This approximates the
+    part that matters visually - creases and cavities going dark - by measuring
+    how far each vertex sits above or below the average of its neighbours along
+    its own normal. Concave vertices get occluded, convex ones do not.
+
+    Returns a 0-1 multiplier, 1 = fully lit.
+    """
+    normals = vertex_normals(verts, faces)
+    delta = neighbour_mean(verts, faces) - verts
+    concavity = np.einsum("ij,ij->i", delta, normals)
+
+    if scale is None:
+        edge = np.linalg.norm(verts[faces[:, 0]] - verts[faces[:, 1]], axis=1)
+        scale = max(float(np.median(edge)), 1e-6)
+
+    # Normalising by one edge length makes every micro-crease saturate, which
+    # on a ridged crust turns the whole surface into black camouflage. Dividing
+    # by several edge lengths keeps the darkening on real cavities.
+    occ = np.clip(concavity / (scale * max(spread, 1e-6)), 0.0, 1.0)
+    return np.clip(1.0 - strength * occ, 0.0, 1.0)
+
+
+def contact_shadow(target_verts, occluder_verts, radius=14.0, strength=0.55,
+                   max_samples=6000, seed=0):
+    """Darkening on a surface where other geometry sits close to it.
+
+    A GLB carries no shadows, and the reference look wants the contact darkening
+    baked in. This measures, for every target vertex, the distance to the
+    nearest occluder point and darkens with a smooth falloff - which is what
+    puts the food's shadow onto the plate.
+
+    Occluders are subsampled; exact nearest-neighbour over half a million
+    vertices is not worth the time for a soft falloff.
+    """
+    occ = np.asarray(occluder_verts, dtype=float)
+    if len(occ) > max_samples:
+        rng = np.random.default_rng(seed)
+        occ = occ[rng.choice(len(occ), max_samples, replace=False)]
+
+    target = np.asarray(target_verts, dtype=float)
+    nearest = np.full(len(target), np.inf)
+    chunk = 4096
+    for start in range(0, len(target), chunk):
+        block = target[start:start + chunk]
+        d = np.linalg.norm(block[:, None, :] - occ[None, :, :], axis=2)
+        nearest[start:start + chunk] = d.min(axis=1)
+
+    t = np.clip(nearest / max(radius, 1e-6), 0.0, 1.0)
+    falloff = t * t * (3.0 - 2.0 * t)
+    return np.clip(1.0 - strength * (1.0 - falloff), 0.0, 1.0)
+
+
 def crust(verts, faces, seed=1, mass=3.0, mass_freq=0.030, grain=1.5, grain_freq=0.16):
     """Two-scale breading: coarse lumps of batter, then a fine crumb on top.
 

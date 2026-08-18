@@ -29,7 +29,8 @@ from cadpy.assembly import AssemblyHelper
 import garnish as G
 import shading
 from fish import make_fillet, sear
-from mesh_kit import roughen, subdivide, tessellate, weld, write_glb
+from mesh_kit import (contact_shadow, curvature_ao, roughen, subdivide,
+                      tessellate, weld, write_glb)
 from plate import WELL_DEPTH, make_plate
 
 HERE = Path(__file__).resolve().parent
@@ -93,6 +94,43 @@ HERB_PLACEMENTS = [
 ]
 
 
+def _drape(verts):
+    """Lower/raise vertices so the part follows the plate's curved well."""
+    out = np.array(verts, dtype=float)
+    centre_z = plate_height(float(out[:, 0].mean()), float(out[:, 1].mean()))
+    local = np.array([plate_height(x, y) for x, y in out[:, :2]])
+    out[:, 2] += local - centre_z
+    return out
+
+
+def _bake_lighting(built):
+    """Bake ambient occlusion and contact shadows into the vertex colours.
+
+    A GLB carries no lighting, and the brief asks for neutral even lighting with
+    contact shadows baked in rather than cast at render time. Two contributions:
+    creases go darker via curvature AO, and the plate darkens where food sits
+    close to it, which is what visually anchors everything to the surface.
+    """
+    food = [v for label, v, *_ in built if label != "plate"]
+    occluders = np.concatenate(food, axis=0) if food else None
+
+    for entry in built:
+        label, v, f, col, rough, vcolors = entry
+        if vcolors is None:
+            vcolors = np.tile(np.asarray(col, dtype=float), (len(v), 1))
+
+        # Gentle: this is contact/cavity shading, not a burnt look.
+        shade = curvature_ao(v, f, strength=0.30 if label != "fish_fillet" else 0.20)
+
+        if label == "plate" and occluders is not None:
+            shade = shade * contact_shadow(v, occluders, radius=9.0, strength=0.38)
+        else:
+            # Everything else picks up a little darkening near the plate too.
+            shade = shade * (0.82 + 0.18 * np.clip(v[:, 2] / 26.0, 0.0, 1.0))
+
+        entry[5] = np.clip(vcolors * shade[:, None], 0.0, 1.0)
+
+
 def _bodies():
     """Every solid in the scene, already placed. [(label, solid, colour)]"""
     out = [("plate", make_plate(), COL_PLATE)]
@@ -128,70 +166,83 @@ def gen_step():
 
 def build_glb(path=None, preview=None):
     path = Path(path or HERE / "plated_fish.glb")
-    prims = []
+    built = []
 
     for index, (label, solid, col) in enumerate(_bodies()):
         rough = 0.55
+        vcolors = None
 
         if label == "plate":
-            # No displacement at all: glazed porcelain is smooth, and noise here
-            # reads as a cheap ceramic rather than a restaurant plate.
-            v, f = weld(*tessellate(solid, 0.12, 0.12))
-            rough = 0.14
+            v, f = weld(*tessellate(solid, 0.10, 0.10))
+            rough = 0.58                       # matte glaze, per the brief
+            vcolors = np.tile(np.asarray(COL_PLATE, dtype=float), (len(v), 1))
 
         elif label == "fish_fillet":
-            v, f = weld(*tessellate(solid, 0.16, 0.16))
+            v, f = weld(*tessellate(solid, 0.14, 0.14))
             v, f = subdivide(v, f, 2)
             v = sear(v, f, seed=11)
-            rough = 0.42
+            vcolors = shading.fish(v, f, seed=11)
+            # Matte enough that the crust geometry reads; a low roughness here
+            # makes the fillet look like moulded plastic.
+            rough = 0.62
 
-        elif label.startswith("leek"):
-            v, f = weld(*tessellate(solid, 0.16, 0.16))
+        elif label.startswith("leek_") and label != "leek_curl":
+            v, f = weld(*tessellate(solid, 0.16, 0.18))
             v, f = subdivide(v, f, 1)
-            v = roughen(v, f, amplitude=0.42, frequency=0.30, octaves=3,
+            v = roughen(v, f, amplitude=0.30, frequency=0.34, octaves=3,
                         seed=200 + index, bias=0.0, axis_scale=(0.16, 1.0, 1.0))
-            rough = 0.46
+            # Blistering along the charred bands.
+            v = roughen(v, f, amplitude=0.22, frequency=0.75, octaves=2,
+                        seed=260 + index, bias=0.0)
+            vcolors = shading.leek(v, f, seed=31 + index)
+            rough = 0.44
+
+        elif label == "leek_curl":
+            v, f = weld(*tessellate(solid, 0.10, 0.12))
+            v, f = subdivide(v, f, 1)
+            vcolors = shading.leek(v, f, seed=37, length_axis=2)
+            rough = 0.44
 
         elif label.startswith("tomato"):
             v, f = weld(*tessellate(solid, 0.12, 0.14))
             v, f = subdivide(v, f, 1)
-            # Roasted skin slumps in broad, soft folds - low frequency only.
-            v = roughen(v, f, amplitude=1.15, frequency=0.075, octaves=2,
+            v = roughen(v, f, amplitude=1.05, frequency=0.075, octaves=2,
                         seed=300 + index, bias=0.0)
-            rough = 0.26
+            # Wrinkled, blistered skin: fine and high contrast over the slump.
+            v = roughen(v, f, amplitude=0.42, frequency=0.42, octaves=3,
+                        seed=340 + index, bias=0.0)
+            vcolors = shading.tomato(v, f, seed=41 + index)
+            rough = 0.30
 
         elif label.startswith("sauce"):
             v, f = weld(*tessellate(solid, 0.25, 0.25))
-            v, f = subdivide(v, f, 2)
+            v, f = subdivide(v, f, 1)
             v = G.comb(v, f, seed=500 + index,
-                       amplitude=0.55 if label.endswith("green") else 0.95)
-            rough = 0.30
+                       amplitude=0.12 if label.endswith("green") else 0.20)
+            # Drape onto the plate. A sauce is spread ON the surface, so its
+            # underside has to follow the well's curve; left flat it either
+            # floats at the outer edge or sinks through near the centre.
+            v = _drape(v)
+            if label == "sauce_red":
+                vcolors = shading.sauce(v, f, seed=51)
+            else:
+                vcolors = shading.sauce(v, f, seed=57, base=(0.31, 0.43, 0.12),
+                                        deep=(0.16, 0.25, 0.06), thin=(0.42, 0.54, 0.19))
+            rough = 0.14                        # glossy, per the brief
 
         else:  # herbs
-            v, f = weld(*tessellate(solid, 0.14, 0.16))
-            rough = 0.44
-
-        # Per-vertex colour. The plate is the one thing left flat: a glaze is
-        # genuinely uniform, and variation on it reads as dirt.
-        vcolors = None
-        if label == "fish_fillet":
-            vcolors = shading.fish(v, f, seed=11)
-        elif label.startswith("leek_") and label != "leek_curl":
-            vcolors = shading.leek(v, f, seed=31 + index)
-        elif label == "leek_curl":
-            vcolors = shading.leek(v, f, seed=37, length_axis=2)
-        elif label.startswith("tomato"):
-            vcolors = shading.tomato(v, f, seed=41 + index)
-        elif label == "sauce_red":
-            vcolors = shading.sauce(v, f, seed=51)
-        elif label == "sauce_green":
-            vcolors = shading.sauce(v, f, seed=57, base=(0.31, 0.43, 0.12),
-                                    deep=(0.16, 0.25, 0.06), thin=(0.42, 0.54, 0.19))
-        elif label.startswith("herb"):
+            v, f = weld(*tessellate(solid, 0.12, 0.14))
+            v, f = subdivide(v, f, 1)
             vcolors = shading.herb(v, f, seed=61 + index)
+            rough = 0.38
 
-        prims.append({"name": label, "verts": v, "faces": f, "vcolors": vcolors,
-                      "color": col, "roughness": rough, "metallic": 0.0})
+        built.append([label, v, f, col, rough, vcolors])
+
+    _bake_lighting(built)
+
+    prims = [{"name": lb, "verts": v, "faces": f, "vcolors": vc,
+              "color": col, "roughness": r, "metallic": 0.0}
+             for lb, v, f, col, r, vc in built]
 
     size = write_glb(path, prims)
     tris = sum(len(p["faces"]) for p in prims)

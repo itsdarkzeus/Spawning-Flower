@@ -167,12 +167,13 @@ def make_tomato(length=22.0):
 # --------------------------------------------------------------------------
 
 # Purslane-style micro leaves: rounded, not pointed ovals.
+# Flat and delicate. Earlier versions were thick enough to read as discs.
 LEAF_SECTIONS = [
-    (0.00, 1.2, 0.25, 0.0),
-    (0.25, 4.4, 0.55, 0.2),
-    (0.55, 5.0, 0.62, 0.0),
-    (0.82, 3.8, 0.50, -0.2),
-    (1.00, 1.0, 0.22, -0.4),
+    (0.00, 1.2, 0.10, 0.0),
+    (0.25, 4.4, 0.24, 0.2),
+    (0.55, 5.0, 0.28, 0.0),
+    (0.82, 3.8, 0.22, -0.2),
+    (1.00, 1.0, 0.09, -0.4),
 ]
 
 
@@ -186,21 +187,24 @@ def make_leaf(length=13.0):
 
 # Plated sauce is a thin film, 2-3 mm at most. Earlier versions stood 6.6 mm
 # proud and read as a slab of jelly rather than something spooned on.
+# A spooned smear is a film, not a pat. Under 1 mm at the tail, ~1.6 mm at the
+# thickest, and it is draped onto the plate's curve in the assembly rather than
+# sitting flat on a tangent plane.
 SMEAR_SECTIONS = [
-    (0.00,  5.0, 0.30, 0.0),
-    (0.18, 16.0, 0.90, 1.5),
-    (0.42, 25.0, 1.45, 1.0),
-    (0.66, 28.0, 1.65, -1.0),
-    (0.86, 22.0, 1.20, -2.5),
-    (1.00, 10.0, 0.55, -3.5),
+    (0.00,  6.0, 0.16, 0.0),
+    (0.18, 17.0, 0.52, 1.5),
+    (0.42, 26.0, 0.92, 1.0),
+    (0.66, 29.0, 1.10, -1.0),
+    (0.86, 23.0, 0.72, -2.5),
+    (1.00, 11.0, 0.26, -3.5),
 ]
 
 DOLLOP_SECTIONS = [
-    (0.00,  5.0, 0.50, 0.0),
-    (0.22, 17.0, 1.60, 0.0),
-    (0.50, 21.0, 2.10, 0.0),
-    (0.78, 17.0, 1.60, 0.0),
-    (1.00,  8.0, 0.70, 0.0),
+    (0.00,  5.0, 0.28, 0.0),
+    (0.22, 17.0, 0.95, 0.0),
+    (0.50, 21.0, 1.30, 0.0),
+    (0.78, 17.0, 0.95, 0.0),
+    (1.00,  8.0, 0.34, 0.0),
 ]
 
 
@@ -214,7 +218,7 @@ def make_dollop(length=52.0):
     return lofted_lobe(DOLLOP_SECTIONS, length, flatten=0.01)
 
 
-def comb(verts, faces, seed=5, amplitude=0.32, frequency=0.34):
+def comb(verts, faces, seed=5, amplitude=0.16, frequency=0.40):
     """Streaks running along the smear, as if dragged with the back of a spoon."""
     from mesh_kit import roughen
 

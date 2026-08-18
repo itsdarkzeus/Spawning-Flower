@@ -78,9 +78,9 @@ def make_fillet(sections=FILLET_SECTIONS, length: float = FILLET_LENGTH):
     return Pos(-box.center().X, -box.center().Y, -box.min.Z) * piece
 
 
-def sear(verts, faces, seed=11, grain=0.95, grain_freq=0.11,
-         mottle=0.48, mottle_freq=0.32, crisp=0.22, crisp_freq=0.75,
-         seam_depth=2.4, seam_width=6.5):
+def sear(verts, faces, seed=11, grain=0.85, grain_freq=0.11,
+         mottle=0.42, mottle_freq=0.32, crisp=0.18, crisp_freq=0.75,
+         flake=2.4, flake_freq=0.34, micro=0.55, micro_freq=1.05, seam_depth=2.4, seam_width=6.5):
     """Seared surface: grain along the length, mottling, and a centre seam.
 
     `axis_scale` compresses the noise sample along X so the features elongate
@@ -102,6 +102,28 @@ def sear(verts, faces, seed=11, grain=0.95, grain_freq=0.11,
                 seed=seed + 613, bias=0.0, axis_scale=(0.55, 1.0, 1.0), mask=fade)
     v = roughen(v, faces, amplitude=crisp, frequency=crisp_freq, octaves=2,
                 seed=seed + 1289, bias=0.0, axis_scale=(0.4, 1.0, 1.0), mask=fade)
+
+    # Flaking. Fish flakes separate ACROSS the fillet, so the field has to vary
+    # quickly along X and slowly across Y - the opposite anisotropy to the
+    # lengthwise grain above. Ridged noise, not fbm: taking 1-|n| puts a crease
+    # where the field crosses zero, which is what reads as a flake edge instead
+    # of a soft bump.
+    from mesh_kit import ridged, vertex_normals as _vn
+
+    n = _vn(v, faces)
+    up = np.clip(n[:, 2], 0.0, 1.0)          # crust only on the seared face
+
+    r = ridged(v * np.array([1.0, 0.22, 0.22]), octaves=3, frequency=flake_freq,
+               seed=seed + 77, sharpness=2.3)
+    v = v + n * ((r - 0.45) * flake * fade * up)[:, None]
+
+    # A second, finer ridge pass for the crisped micro-texture on top of the
+    # flakes. Sub-millimetre displacement is invisible at plate scale, so both
+    # passes are deliberately coarse enough to catch the light.
+    n = _vn(v, faces)
+    r2 = ridged(v * np.array([1.0, 0.45, 0.45]), octaves=2, frequency=micro_freq,
+                seed=seed + 401, sharpness=2.8)
+    v = v + n * ((r2 - 0.45) * micro * fade * up)[:, None]
 
     # Centre seam: a Gaussian groove along y = 0, pressed only into the upward
     # facing surface so the flat underside is untouched.

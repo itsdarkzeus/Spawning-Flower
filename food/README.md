@@ -178,6 +178,38 @@ micro herbs. Built by `plated_fish.py` into `plated_fish.glb` and
 | `garnish.py` | Leeks, curl, tomatoes, leaves, sauce bodies, `comb()` |
 | `plated_fish.py` | Scene layout, `gen_step()` and `build_glb()` |
 
+## Surface detail and baked lighting
+
+The dish is built to a look brief: crisp browned crust with visible flaking,
+blackened grill stripes, wrinkled tomato skins, thin glossy sauce smears that
+follow the plate, and neutral lighting with contact shadows baked in.
+
+**Ridged noise for crust.** Ordinary fbm gives rounded lumps. `mesh_kit.ridged`
+returns `1 - |fbm|` sharpened, which puts a crease wherever the field crosses
+zero — that is what reads as a flake edge. Two passes: coarse flakes then a
+finer crisped layer. Both are deliberately coarse; **sub-millimetre
+displacement is invisible at plate scale**, which is why the first attempt at
+0.95 mm looked perfectly smooth.
+
+**Colour tied to the same field.** The crust is geometrically there but reads
+flat unless the crevices also go dark, so `shading.fish` re-evaluates the same
+ridge field and browns the valleys.
+
+**Anisotropy decides what a pattern *is*.** Fish flakes run across the fillet,
+so the noise varies quickly along X and slowly across Y. Leek grill marks are
+bands across the stalk — the same relationship. Sampled isotropically the char
+reads as mould rather than grill marks.
+
+**Baked lighting.** A GLB carries no shadows. `curvature_ao` darkens creases
+from local concavity, and `contact_shadow` darkens the plate where food sits
+close to it, both multiplied into the vertex colours. Keep the AO gentle: at
+strength 0.75 every micro-crease on a ridged crust saturates and the fillet
+turns into black camouflage.
+
+**Sauces are draped, not placed.** `_drape()` offsets each sauce vertex by the
+plate's local height so the film follows the well's curve instead of sitting
+flat on a tangent plane, which otherwise floats at the outer edge.
+
 ## What this dish added to the toolkit
 
 **Anisotropic noise.** The meal box only needed isotropic lumpiness — crumbs

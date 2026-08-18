@@ -53,7 +53,7 @@ def fish(verts, faces, seed=11,
     """
     grain = _unit(fbm(verts * np.array([0.22, 1.0, 1.0]), octaves=4,
                       frequency=0.10, seed=seed))
-    patch = _smoothstep(0.28, 0.66, grain)
+    patch = _smoothstep(0.30, 0.62, grain)
 
     normals = vertex_normals(verts, faces)
     col = _mix(pale, gold, patch)
@@ -66,12 +66,21 @@ def fish(verts, faces, seed=11,
     ax = max(np.abs(verts[:, 0]).max(), 1e-6)
     ay = max(np.abs(verts[:, 1]).max(), 1e-6)
     radial = np.sqrt((verts[:, 0] / ax) ** 2 + (verts[:, 1] / ay) ** 2)
-    border = _smoothstep(0.58, 1.0, radial)
-    col = _mix_arr(col, brown, 0.80 * border)
+    border = _smoothstep(0.70, 1.02, radial)
+    col = _mix_arr(col, brown, 0.72 * border)
 
     # Plus the true silhouette, which catches the sides in an angled view.
     rim = np.power(1.0 - np.abs(normals[:, 2]), 1.6)
-    col = _mix_arr(col, brown, 0.55 * rim)
+    col = _mix_arr(col, brown, 0.42 * rim)
+
+    # Tie the colour to the SAME ridge field the displacement uses, so the
+    # crevices between flakes read dark. Without this the crust is geometrically
+    # there but visually flat, because shading alone barely resolves it.
+    from mesh_kit import ridged as _ridged
+
+    flake = _ridged(verts * np.array([1.0, 0.22, 0.22]), octaves=3,
+                    frequency=0.34, seed=seed + 77, sharpness=2.3)
+    col = _mix_arr(col, brown, 0.55 * _smoothstep(0.55, 0.12, flake))
 
     # The centre seam reads as a dark line, not just a groove.
     seam = np.exp(-(verts[:, 1] / 5.0) ** 2) * np.clip(normals[:, 2], 0.0, 1.0)
@@ -99,10 +108,13 @@ def leek(verts, faces, seed=31, length_axis=0,
     col = col * (1.0 - _smoothstep(0.55, 1.0, t)[:, None]) + \
         np.asarray(tip)[None, :] * _smoothstep(0.55, 1.0, t)[:, None]
 
-    scorch = _unit(fbm(verts * np.array([0.55, 1.0, 1.0]), octaves=3,
-                       frequency=0.11, seed=seed))
+    # Grill marks are BANDS ACROSS the stalk, so the field must vary quickly
+    # along its length and slowly around its girth - the opposite anisotropy to
+    # a lengthwise grain. Sampled blobby, it reads as mould rather than char.
+    scorch = _unit(fbm(verts * np.array([1.0, 0.16, 0.16]), octaves=2,
+                       frequency=0.17, seed=seed))
     # Only the stalk chars, not the pale root end.
-    burn = _smoothstep(0.50, 0.74, scorch) * _smoothstep(0.10, 0.24, t)
+    burn = _smoothstep(0.44, 0.58, scorch) * _smoothstep(0.10, 0.24, t)
     return np.clip(_mix_arr(col, char, burn), 0.0, 1.0)
 
 

@@ -52,8 +52,9 @@ def make_plate():
                 # then produces a stunted plate rather than failing outright.
                 under = Polyline(
                     (r_out, RIM_HEIGHT),
-                    (r_out, RIM_HEIGHT - 2.4),
-                    (132.0, 17.0),
+                    (r_out, RIM_HEIGHT - 5.2),      # visible edge thickness
+                    (137.0, RIM_HEIGHT - 6.4),
+                    (132.0, 16.0),
                     (114.0, 9.4),
                     (95.0, 5.2),
                     (70.0, 3.2),
