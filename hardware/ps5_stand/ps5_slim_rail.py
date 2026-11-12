@@ -26,7 +26,8 @@ Dimensions
     Slim (358) and the original PS5 (390).
 """
 
-from math import radians, tan
+import hashlib
+from math import atan2, degrees, hypot, pi, radians, sin, sqrt, tan
 
 from build123d import (
     Align,
@@ -41,6 +42,7 @@ from build123d import (
     Plane,
     Polygon,
     Pos,
+    Rectangle,
     Rot,
     extrude,
     fillet,
@@ -65,7 +67,7 @@ rail_h = 15.0       # seat height: lifts the console off the desk
 base_t = 5.0        # wall thickness at the seat
 wall_lean_in = 5.0  # deg, inner face leans outward as it rises
 crest_h = 36.0      # wall top at the front and back ends
-dip_h = 19.0        # wall top at the middle
+dip_h = 22.0        # wall top at the middle
 plan_r_outer = 20.0 # plan corner radius, wall side
 plan_r_inner = 8.0  # plan corner radius, bar side
 top_round = 1.3     # fillet on the wall's top edges
@@ -93,6 +95,23 @@ foot_depth = 1.5
 foot_y = 85.0
 
 cut_overshoot = 1.0
+
+# --- Personalisation: engraved on the wall's outer face ----------------------
+# Everything here is shallow engraving, so the sweep of the wall is untouched.
+personal_text = "itsdarkzeus"
+personalise = True
+engrave_depth = 0.7
+stroke_w = 1.0
+text_scale = 0.9        # glyph grid is 4 wide, 5 x-height, 8 ascender
+text_gap = 1.8          # grid units between letters
+text_base_z = 6.5       # baseline height above the desk
+bolt_y = 78.0           # Zeus bolts, one each side of the name
+bolt_w = 11.0
+bolt_h = 15.0
+bolt_z = 17.0
+wave_z = 16.9           # signature line, drawn from a hash of the text
+wave_half = 40.0
+wave_w = 0.9
 
 # --- Derived ----------------------------------------------------------------
 cav_w = bar_w + 2.0 * slide_clear
@@ -198,6 +217,118 @@ def _foot_tool():
     return p.part
 
 
+# --- Lettering ---------------------------------------------------------------
+# Angular stroke letters, each a list of polylines on a 4 x 5 grid (x-height 5,
+# ascender 8). Drawn as strokes so the lettering needs no font on the machine.
+GLYPHS = {
+    "i": [[(0, 0), (0, 5)], [(0, 7), (0, 7.05)]],
+    "t": [[(1.5, 7.2), (1.5, 1), (2.5, 0), (3.6, 0)], [(0, 5), (3.4, 5)]],
+    "s": [[(4, 5), (0.6, 5), (0, 4.4), (0, 3.2), (0.6, 2.5), (3.4, 2.5), (4, 1.8),
+           (4, 0.6), (3.4, 0), (0, 0)]],
+    "d": [[(4, 5), (0.6, 5), (0, 4.4), (0, 0.6), (0.6, 0), (4, 0)], [(4, 0), (4, 8)]],
+    "a": [[(4, 5), (0.6, 5), (0, 4.4), (0, 0.6), (0.6, 0), (4, 0)], [(4, 0), (4, 5)]],
+    "r": [[(0, 0), (0, 5)], [(0, 3.4), (1.0, 4.6), (1.8, 5), (3.6, 5)]],
+    "k": [[(0, 0), (0, 8)], [(3.8, 5), (0.2, 2.3)], [(1.2, 3.1), (4, 0)]],
+    "z": [[(0, 5), (4, 5), (0, 0), (4, 0)]],
+    "e": [[(0, 2.5), (4, 2.5), (4, 4.4), (3.4, 5), (0.6, 5), (0, 4.4), (0, 0.6),
+           (0.6, 0), (3.4, 0), (4, 0.6)]],
+    "u": [[(0, 5), (0, 0.6), (0.6, 0), (3.4, 0), (4, 0.6), (4, 5)]],
+}
+
+# Letter widths in grid units; anything not listed is 4. Narrow letters get a
+# narrow cell, otherwise the "i" leaves a hole in the name.
+ADVANCE = {"i": 0.0, "t": 3.6, "r": 3.8}
+
+# Zeus bolt, 0-1 unit square: (across, up)
+BOLT = [(0.55, 1.0), (0.05, 0.38), (0.42, 0.38), (0.28, 0.0), (0.95, 0.66),
+        (0.57, 0.66), (0.82, 1.0)]
+
+
+def signature_seed(text=personal_text):
+    """Eight bytes from a hash of the text. Same text -> same pattern, always."""
+    return hashlib.sha256(text.encode("utf-8")).digest()
+
+
+def signature_wave(text=personal_text, steps=70):
+    """Flowing line as (y, z) points: three sines whose amplitude, frequency and
+    phase all come from the hash, so only this exact text draws this exact line."""
+    d = signature_seed(text)
+    parts = []
+    for k, weight in enumerate((0.55, 0.30, 0.15)):
+        amp = weight * (0.6 + 0.4 * d[3 * k] / 255.0) * 1.0
+        freq = 1.0 + k + (d[3 * k + 1] % 2)
+        phase = 2.0 * pi * d[3 * k + 2] / 255.0
+        parts.append((amp, freq, phase))
+    pts = []
+    for i in range(steps + 1):
+        t = i / steps
+        y = -wave_half + 2.0 * wave_half * t
+        z = wave_z + sum(a * sin(2.0 * pi * f * t + ph) for a, f, ph in parts)
+        pts.append((y, z))
+    return pts
+
+
+def _stroke(points, width):
+    """Inside a BuildSketch: a round-capped, round-jointed stroke along points."""
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        length = hypot(x1 - x0, y1 - y0)
+        if length < 1e-6:
+            continue
+        with Locations(((x0 + x1) / 2.0, (y0 + y1) / 2.0)):
+            Rectangle(length, width, rotation=degrees(atan2(y1 - y0, x1 - x0)))
+    for x, y in points:
+        with Locations((x, y)):
+            Circle(width / 2.0)
+
+
+def _text_strokes():
+    """Polylines for the name in (y, z) on the wall face, centred on y=0."""
+    widths = [ADVANCE.get(ch, 4.0) for ch in personal_text]
+    total = (sum(widths) + text_gap * (len(widths) - 1)) * text_scale
+    out = []
+    cursor = -total / 2.0
+    for ch, width in zip(personal_text, widths):
+        for line in GLYPHS[ch]:
+            out.append([(cursor + gx * text_scale, text_base_z + gy * text_scale)
+                        for gx, gy in line])
+        cursor += (width + text_gap) * text_scale
+    return out
+
+
+def _wall_top_at(y):
+    """Height of the swoop at distance y from the middle of the rail."""
+    h = crest_h - dip_h
+    radius = (crest_y ** 2 + h ** 2) / (2.0 * h)
+    return dip_h + radius - sqrt(radius ** 2 - y ** 2)
+
+
+def _engraving():
+    """Cutter for all the engraving, built OUTSIDE any BuildPart. Its plane faces
+    +X with u = +Y and v = +Z, so it reads correctly to someone standing outside."""
+    top_of_text = text_base_z + 8.0 * text_scale + stroke_w
+    assert top_of_text < wave_z - 1.0, "name collides with the signature line"
+    assert wave_z + 1.2 + wave_w < _wall_top_at(0.0) - top_round - 0.5, \
+        "signature line too close to the wall top"
+    assert bolt_z + bolt_h / 2.0 < _wall_top_at(bolt_y - bolt_w / 2.0) - 2.0, \
+        "bolt pokes through the wall top"
+    assert bolt_y + bolt_w / 2.0 < rail_len / 2.0 - plan_r_outer, \
+        "bolt runs into the rounded plan corner"
+
+    plane = Plane(origin=(x_out - engrave_depth, 0.0, 0.0),
+                  x_dir=(0.0, 1.0, 0.0), z_dir=(1.0, 0.0, 0.0))
+    with BuildPart() as p:
+        with BuildSketch(plane):
+            for line in _text_strokes():
+                _stroke(line, stroke_w)
+            _stroke(signature_wave(), wave_w)
+            for sign in (-1.0, 1.0):
+                pts = [(sign * bolt_y + (px - 0.5) * bolt_w,
+                        bolt_z + (py - 0.5) * bolt_h) for px, py in BOLT]
+                Polygon(*pts, align=None)
+        extrude(amount=engrave_depth + 0.5)
+    return p.part
+
+
 def make_rail():
     body = _wall_extrusion() & _plan_prism()
     body = body - _swoop_tool()
@@ -214,6 +345,8 @@ def make_rail():
 
     body = body + _bar() + _sleeve()
     body = body - _lock_tool() - _foot_tool()
+    if personalise:
+        body = body - _engraving()
 
     bb = body.bounding_box()
     assert abs(bb.min.Z) < 1e-6 and abs(bb.max.Z - crest_h) < 2.0, bb
