@@ -9,7 +9,7 @@ Disc and Digital) and the original PS5 (390 mm).
 
 | Part | File | Size (mm) |
 |---|---|---|
-| Rail (print x2) | `ps5_slim_rail.py` -> `.step`, `meshes/ps5_slim_rail.stl` | 243.5 x 236 x 32 |
+| Rail (print x2) | `ps5_slim_rail.py` -> `.step`, `meshes/ps5_slim_rail.stl` | 245 x 236 x 35.4 |
 | Assembly + fit-check envelope | `ps5_slim_stand.py` -> `.step` | gap-dependent |
 | Range / interference check | `check_adjustment.py` | |
 
@@ -31,14 +31,22 @@ Set the width with the console off: the lock is not reachable once it is on.
 
 ## Design choices
 
-- Bar 12 x 8 mm in a 12.7 x 8.7 mm sleeve (0.35 mm per side printed clearance).
-- Bar and sleeve sit below the console underside (2.5 mm gap) and carry no
+**Form**
+- One sweeping wall per rail instead of two tabs: a high crest at the front
+  and back, dipping to 19 mm in the middle. The middle of each end face stays
+  open for the vents.
+- The wall's inner face leans outward 5 deg, so the console drops straight in
+  with nothing undercut. Top edge fully rounded (1.3 mm).
+- Generous plan corners (20 mm wall side, 8 mm bar side) and a 3 mm rounded
+  underside, so the rail reads as lifted off the desk.
+- The console sits 15 mm up, floating over the rails.
+
+**Mechanism**
+- Bar 12 x 7 mm in a 12.7 x 7.7 mm sleeve (0.35 mm per side printed clearance).
+- Bar and sleeve sit below the console underside (3.3 mm gap) and carry no
   weight - the rails do.
 - Engagement stays 110 mm closed down to 50 mm fully open.
 - 1.5 mm end clearance at the default Slim setting.
-- Tabs sit at the front/back of each rail only, keeping the middle of each end
-  face open for vents.
-- Rail lifts the console 16 mm; tabs rise a further 16 mm.
 
 ## Checked (`check_adjustment.py`)
 
