@@ -27,7 +27,7 @@ Dimensions
 """
 
 import hashlib
-from math import atan2, degrees, hypot, pi, radians, sin, sqrt, tan
+from math import atan2, cos, degrees, hypot, pi, radians, sin, sqrt, tan
 
 from build123d import (
     Align,
@@ -281,6 +281,36 @@ def _stroke(points, width):
             Circle(width / 2.0)
 
 
+def _ribbon(points, width, cap_steps=6):
+    """Inside a BuildSketch: ONE polygon tracing a smooth line with round ends.
+
+    Stacking ~70 rectangles and circles for the signature line left pinch points
+    where the unions barely touched, and the tessellated STL came out
+    non-manifold there. A single outline has no unions to go wrong."""
+    half = width / 2.0
+    n = len(points)
+    left, right = [], []
+    for i, (x, y) in enumerate(points):
+        x0, y0 = points[max(i - 1, 0)]
+        x1, y1 = points[min(i + 1, n - 1)]
+        length = hypot(x1 - x0, y1 - y0)
+        nx, ny = -(y1 - y0) / length, (x1 - x0) / length
+        left.append((x + nx * half, y + ny * half))
+        right.append((x - nx * half, y - ny * half))
+
+    def cap(centre, start, sign):
+        """Half-circle around `centre`, from `start` offset, turning by sign*pi."""
+        cx, cy = centre
+        a0 = atan2(start[1] - cy, start[0] - cx)
+        return [(cx + half * cos(a0 + sign * pi * k / cap_steps),
+                 cy + half * sin(a0 + sign * pi * k / cap_steps))
+                for k in range(1, cap_steps)]
+
+    outline = left + cap(points[-1], left[-1], -1.0) + right[::-1] + \
+        cap(points[0], right[0], -1.0)
+    Polygon(*outline, align=None)
+
+
 def _text_strokes():
     """Polylines for the name in (y, z) on the wall face, centred on y=0."""
     widths = [ADVANCE.get(ch, 4.0) for ch in personal_text]
@@ -320,7 +350,7 @@ def _engraving():
         with BuildSketch(plane):
             for line in _text_strokes():
                 _stroke(line, stroke_w)
-            _stroke(signature_wave(), wave_w)
+            _ribbon(signature_wave(), wave_w)
             for sign in (-1.0, 1.0):
                 pts = [(sign * bolt_y + (px - 0.5) * bolt_w,
                         bolt_z + (py - 0.5) * bolt_h) for px, py in BOLT]

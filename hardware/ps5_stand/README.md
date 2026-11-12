@@ -16,6 +16,20 @@ Disc and Digital) and the original PS5 (390 mm).
 Hardware (per stand): 2x M4 heat-set insert (5.6 x 5.7 mm hole), 2x M4x12
 thumbscrew, 4x 12 mm stick-on rubber feet.
 
+## Which file do I use?
+
+| For | File |
+|---|---|
+| **Send to the 3D printer** (print **2 copies**, same file) | `meshes/ps5_slim_rail.stl` (or `.3mf`, same geometry) |
+| **View / share in 3D** (rails + console envelope, adjustable gap shown at the Slim setting) | `meshes/ps5_slim_stand.glb` |
+| View one rail | `meshes/ps5_slim_rail.glb` |
+| Edit / CAD | `ps5_slim_rail.step`, `ps5_slim_stand.step` |
+
+The STL and 3MF are in millimetres. The GLBs are glTF 2.0 standard: metres and
+Y-up. Print orientation: as supplied (flat on its underside, wall pointing up).
+Both exports are checked watertight with 0 non-manifold edges, volume within
+0.07% of the CAD.
+
 ## Source dimensions
 
 Sony's published outer size: 358 x 96 x 216 mm (W x H x D) Disc, 358 x 80 x 216
@@ -92,6 +106,11 @@ and zero console overlap at 361.
 
 ## Rebuild
 
-    python $CAD/scripts/step ps5_slim_rail.py --stl meshes/ps5_slim_rail.stl
-    python $CAD/scripts/step ps5_slim_stand.py
+Pass the mesh tolerances explicitly. The default export tolerance produced a
+non-manifold STL (a 0.2 mm tip at the wall crest), which these settings avoid.
+
+    T="--mesh-tolerance 0.02 --mesh-angular-tolerance 0.2"
+    python $CAD/scripts/step ps5_slim_rail.py --stl meshes/ps5_slim_rail.stl \
+        --3mf meshes/ps5_slim_rail.3mf --glb meshes/ps5_slim_rail.glb $T
+    python $CAD/scripts/step ps5_slim_stand.py --glb meshes/ps5_slim_stand.glb $T
     python check_adjustment.py
