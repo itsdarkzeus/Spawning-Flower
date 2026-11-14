@@ -13,7 +13,10 @@ from cadpy.assembly import AssemblyHelper
 
 import ps5_slim_rail as R
 
-DEFAULT_GAP = R.console_w + 2.0 * R.fit_clear
+# The click-stop only seats on even gaps (gap_max - k * pitch); 360 gives the
+# Slim 1.0 mm clearance at each end.
+DEFAULT_GAP = 360.0
+assert (R.gap_max - DEFAULT_GAP) % R.detent_pitch == 0
 
 
 def place_rails(rail, gap):

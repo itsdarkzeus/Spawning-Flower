@@ -1,11 +1,18 @@
 # Adjustable horizontal PS5 stand
 
-Two identical rails that telescope like a curtain rod. Each rail has one bar and
-one sleeve; turn one rail 180 deg about Z and each bar slides into the other
-rail's sleeve. **Print the rail twice - there is no left/right.**
+Two identical rails that expand and contract like an expanding hanger. Pull them
+apart or push them together and the joint **clicks from step to step and holds,
+with no tool and no screw**. Each rail has one bar and one sleeve; turn one rail
+180 deg about Z and each bar slides into the other rail's sleeve.
+**Print the rail twice - there is no left/right.**
 
-Range, tab face to tab face: **340 - 400 mm**. Covers the PS5 Slim (358 mm,
-Disc and Digital) and the original PS5 (390 mm).
+Range, wall face to wall face: **340 - 400 mm in 2 mm clicks** (31 positions).
+Covers the PS5 Slim (358 mm, Disc and Digital) and the original PS5 (390 mm).
+
+| Console | Click to | Clearance each end |
+|---|---|---|
+| PS5 Slim (358) | **360** | 1.0 mm |
+| Original PS5 (390) | **392** | 1.0 mm |
 
 | Part | File | Size (mm) |
 |---|---|---|
@@ -13,8 +20,9 @@ Disc and Digital) and the original PS5 (390 mm).
 | Assembly + fit-check envelope | `ps5_slim_stand.py` -> `.step` | gap-dependent |
 | Range / interference check | `check_adjustment.py` | |
 
-Hardware (per stand): 2x M4 heat-set insert (5.6 x 5.7 mm hole), 2x M4x12
-thumbscrew, 4x 12 mm stick-on rubber feet.
+Hardware (per stand): 4x 12 mm stick-on rubber feet. Optional, only if you want
+a rigid locked width: 2x M4 heat-set insert (5.6 x 5.7 mm hole) + 2x M4x12
+thumbscrew. The stand holds its width without them.
 
 ## Which file do I use?
 
@@ -37,11 +45,12 @@ Digital. The rails only touch the console ends, so height does not matter.
 
 ## Using it
 
-1. Slide the rails apart until the tab faces are ~3 mm wider than the console.
-2. Tighten both thumbscrews (they are under where the console sits).
-3. Lower the console on, ends inside the tabs.
+1. Take the console off. Pull or push the two rails until the gap suits it; the
+   joint clicks every 2 mm. Slim: click to 360.
+2. Lower the console on, ends inside the walls.
 
-Set the width with the console off: the lock is not reachable once it is on.
+To change width later, lift the console off first, then pull or push. It holds
+by itself between clicks of use; no tools, no screws.
 
 ## Personalisation
 
@@ -77,17 +86,30 @@ inside the wall and off the rounded corners.
   underside, so the rail reads as lifted off the desk.
 - The console sits 15 mm up, floating over the rails.
 
-**Mechanism**
+**Mechanism (the hanger action)**
+- Each bar has 31 V-notches, 2 mm apart. Each sleeve has a U-slotted tongue in
+  its roof (8 x 20 mm, 2 mm thick) with a 45 deg bump. The bump snaps into a
+  notch and the tongue flexes it out again either way, so it clicks both
+  directions and holds at every step.
+- At rest in a notch the tongue is relaxed; it only flexes while moving between
+  clicks, which keeps creep low.
+- Estimated hold about 3-5 N per sleeve (calculated, not measured): plenty to keep
+  an unloaded frame from drifting, not a rigid lock. The optional thumbscrew
+  gives that.
 - Bar 12 x 7 mm in a 12.7 x 7.7 mm sleeve (0.35 mm per side printed clearance).
 - Bar and sleeve sit below the console underside (3.3 mm gap) and carry no
   weight - the rails do.
 - Engagement stays 110 mm closed down to 50 mm fully open.
-- 1.5 mm end clearance at the default Slim setting.
+- 1.0 mm end clearance each end at the default Slim click (360).
 
 ## Checked (`check_adjustment.py`)
 
-At gap 340 / 361 / 393 / 400: valid solids, zero rail-to-rail interference,
-and zero console overlap at 361.
+- All 31 click positions: valid solids and zero rail-to-rail interference, i.e.
+  the bump seats exactly in a notch at every step.
+- Halfway between clicks: 3.9 mm3 of interference per rail pair, the deliberate
+  preload that makes the click and the hold.
+- Console envelope clears both rails at 360 (zero overlap, 1.0 mm each end).
+- STL / 3MF / GLB: watertight, 0 non-manifold edges, volume within 0.07% of CAD.
 
 ## Not verified - check before relying on it
 
@@ -98,7 +120,13 @@ and zero console overlap at 361.
 - Underside contact area and foot positions are not published; rails are 40 mm
   wide for generous support.
 - Nothing stops the console sliding front to back except friction.
-- Lock is a screw pressing on the bar, not a ratchet; it can slip under a knock.
+- **The click action is untested in print.** The geometry seats and preloads
+  correctly in CAD, but the real hold force depends on your filament and
+  printer. Print in PETG: the tongue is a spring and PLA can creep or snap.
+  If it feels loose, raise `bump_h`; if too stiff, lower it (both in the rail
+  source), or fit the optional thumbscrew.
+- The 1.0 mm tongue slot needs a clean 0.4 mm nozzle print to open fully; clear
+  any strings with a blade.
 - **Engraving is untested in print.** Strokes are 1.0 mm wide and 0.7 mm deep,
   which wants a 0.4 mm nozzle and 0.12-0.2 mm layers to stay crisp. Rendered
   shading is too flat to judge depth, so the cut was checked by volume

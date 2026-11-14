@@ -2,7 +2,8 @@
 
 Each rail carries one telescoping bar and one sleeve. Turn one rail 180 deg
 about Z and each bar slides into the other rail's sleeve, so one part serves as
-both sides and the pair expands like a curtain rod.
+both sides. The joint clicks and holds with no tool, like an expanding hanger:
+pull or push and it steps along in 2 mm clicks. A thumbscrew lock is optional.
 
 Coordinate convention (rail local frame)
     Origin : centre of the rail's INNER edge, on the desk surface
@@ -85,9 +86,22 @@ sleeve_len = 170.0
 bar_round = 1.5
 sleeve_round = 2.0
 
-# M4 heat-set insert (5.6 mm x 5.7 mm) in the lock wall + M4 thumbscrew
+# Optional extra lock: M4 heat-set insert (5.6 mm x 5.7 mm) + thumbscrew. The
+# stand holds its width without it; this is only for a rigid, locked setting.
 lock_hole_d = 5.6
 lock_from_mouth = 14.0
+
+# --- Click-stop (the "hanger" action) ----------------------------------------
+# V-notches along the bar and a flexing tongue with a bump in the sleeve roof.
+# Pull the rails apart or push them together and it clicks from notch to notch
+# and holds with no tool, like an expanding hanger.
+detent_pitch = 2.0      # mm per click of the gap (1 mm per console end)
+notch_depth = 0.6       # 90 deg V, so 1.2 mm wide at the surface
+bump_h = 0.85           # past the sleeve roof; seats 0.5 mm into a notch
+tongue_w = 8.0
+tongue_len = 20.0
+tongue_slot = 1.0       # clear slot round the tongue so it can flex
+bump_from_free_end = 5.0
 
 # --- Underside feet pockets (stick-on rubber pads) --------------------------
 foot_d = 12.0
@@ -131,6 +145,27 @@ x_in_top = rail_w + (profile_h - rail_h) * tan(radians(wall_lean_in))
 # the underside fillet cannot run through.
 x_out = rail_w + base_t
 x_max = x_out
+
+roof_z = sleeve_wall + cav_h                 # underside of the sleeve's top wall
+bar_top_z = mid_z + bar_h / 2.0
+bump_x = -sleeve_len + lock_from_mouth       # bump position in the rail frame
+n_clicks = round((gap_max - gap_min) / detent_pitch)
+assert abs(n_clicks * detent_pitch - (gap_max - gap_min)) < 1e-9, \
+    "gap range must be a whole number of detent steps"
+# The bump must reach into a notch and stay clear of the bar's own tip.
+assert bar_top_z - notch_depth < roof_z - bump_h + 0.2
+assert roof_z - bump_h < bar_top_z, "bump never touches the bar"
+
+
+def notch_xs():
+    """Notch positions along the bar (rail frame). The bump of one rail's sleeve
+    meets the other rail's bar when notch x = |bump_x| + 2 rail_w - gap, so each
+    gap_min + k*pitch lands exactly on a notch."""
+    return [-bump_x + 2.0 * rail_w - (gap_max - detent_pitch * k)
+            for k in range(n_clicks + 1)]
+
+
+assert min(notch_xs()) > -bar_len + 10.0 and max(notch_xs()) < -10.0
 
 # The sleeve must stay clear of the console underside.
 assert sleeve_h < rail_h - 2.0
@@ -183,7 +218,19 @@ def _bar():
             Box(bar_len + 1.0, bar_w, bar_h,
                 align=(Align.MAX, Align.CENTER, Align.CENTER))
         fillet(p.edges().filter_by(Axis.X), bar_round)
-    return p.part
+    return p.part - _notch_cutter()
+
+
+def _notch_cutter():
+    """All the V-notches in one sketch, cut across the bar's full width."""
+    half = notch_depth + 0.1                      # 45 deg flanks, tops overshoot
+    with BuildPart() as c:
+        with BuildSketch(Plane.XZ.offset(bar_y)):    # plane sits at y = -bar_y
+            for x in notch_xs():
+                Polygon((x - half, bar_top_z + 0.1), (x, bar_top_z - notch_depth),
+                        (x + half, bar_top_z + 0.1), align=None)
+        extrude(amount=bar_w / 2.0 + 1.0, both=True)
+    return c.part
 
 
 def _sleeve():
@@ -198,7 +245,42 @@ def _sleeve():
         with Locations((0.0, bar_y, sleeve_wall)):
             Box(sleeve_len + cut_overshoot, cav_w, cav_h,
                 align=(Align.MAX, Align.CENTER, Align.MIN), mode=Mode.SUBTRACT)
-    return p.part
+    return p.part - _tongue_slots() + _bump()
+
+
+def _tongue_x0():
+    """Free end of the tongue; the tongue is hinged at its far (rail) end."""
+    return bump_x - bump_from_free_end
+
+
+def _tongue_slots():
+    """U-shaped slot through the sleeve roof, leaving a tongue that flexes."""
+    x0, x1 = _tongue_x0(), _tongue_x0() + tongue_len
+    z0 = roof_z - 0.1
+    h = sleeve_wall + 0.5
+    full_w = tongue_w + 2.0 * tongue_slot
+    long_len = (x1 - x0) + tongue_slot
+    side = []
+    for sign in (-1.0, 1.0):
+        yc = bar_y + sign * (tongue_w + tongue_slot) / 2.0
+        side.append(Pos((x0 - tongue_slot + x1) / 2.0, yc, z0) *
+                    Box(long_len, tongue_slot, h, align=(Align.CENTER, Align.CENTER, Align.MIN)))
+    end = Pos(x0 - tongue_slot / 2.0, bar_y, z0) * \
+        Box(tongue_slot, full_w, h, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return side[0] + side[1] + end
+
+
+def _bump():
+    """Triangular bump under the tongue, at 45 deg so it clicks out of a notch
+    either way. Overshoots into the roof so it fuses to the tongue."""
+    x = bump_x
+    reach = bump_h + 0.2
+    with BuildPart() as b:
+        with BuildSketch(Plane.XZ.offset(-bar_y)):      # plane sits at y = +bar_y
+            Polygon((x - reach, roof_z + 0.2), (x, roof_z - bump_h),
+                    (x + reach, roof_z + 0.2), align=None)
+        extrude(amount=tongue_w / 2.0, both=True)
+    return b.part
 
 
 def _lock_tool():
